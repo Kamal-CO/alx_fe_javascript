@@ -13,13 +13,13 @@ let quotes = [
 const quoteDisplay = document.getElementById('quoteDisplay');
 const newQuoteBtn = document.getElementById('newQuote');
 const showFormBtn = document.getElementById('showForm');
-const addQuoteForm = document.getElementById('addQuoteForm');
-const addQuoteBtn = document.getElementById('addQuote');
-const newQuoteText = document.getElementById('newQuoteText');
-const newQuoteCategory = document.getElementById('newQuoteCategory');
+const formContainer = document.getElementById('formContainer');
 const categoryFilter = document.getElementById('categoryFilter');
 const totalQuotesSpan = document.getElementById('totalQuotes');
 const totalCategoriesSpan = document.getElementById('totalCategories');
+
+// Form elements (will be created dynamically)
+let addQuoteForm, newQuoteText, newQuoteCategory, addQuoteBtn;
 
 // Initialize the application
 function init() {
@@ -29,14 +29,80 @@ function init() {
         quotes = JSON.parse(savedQuotes);
     }
     
+    // Create the add quote form dynamically
+    createAddQuoteForm();
+    
     updateStats();
     showRandomQuote();
     
     // Event listeners
     newQuoteBtn.addEventListener('click', showRandomQuote);
     showFormBtn.addEventListener('click', toggleAddQuoteForm);
+}
+
+// Create the add quote form using createElement and appendChild
+function createAddQuoteForm() {
+    // Create form section element
+    addQuoteForm = document.createElement('section');
+    addQuoteForm.className = 'form-section';
+    addQuoteForm.id = 'addQuoteForm';
+    addQuoteForm.style.display = 'none';
+    
+    // Create form title
+    const formTitle = document.createElement('h2');
+    formTitle.textContent = 'Add Your Own Quote';
+    addQuoteForm.appendChild(formTitle);
+    
+    // Create quote text input group
+    const textGroup = document.createElement('div');
+    textGroup.className = 'form-group';
+    
+    const textLabel = document.createElement('label');
+    textLabel.setAttribute('for', 'newQuoteText');
+    textLabel.textContent = 'Quote Text';
+    textGroup.appendChild(textLabel);
+    
+    newQuoteText = document.createElement('input');
+    newQuoteText.type = 'text';
+    newQuoteText.id = 'newQuoteText';
+    newQuoteText.placeholder = 'Enter a meaningful quote';
+    textGroup.appendChild(newQuoteText);
+    
+    addQuoteForm.appendChild(textGroup);
+    
+    // Create category select group
+    const categoryGroup = document.createElement('div');
+    categoryGroup.className = 'form-group';
+    
+    const categoryLabel = document.createElement('label');
+    categoryLabel.setAttribute('for', 'newQuoteCategory');
+    categoryLabel.textContent = 'Category';
+    categoryGroup.appendChild(categoryLabel);
+    
+    newQuoteCategory = document.createElement('select');
+    newQuoteCategory.id = 'newQuoteCategory';
+    
+    // Create category options
+    const categories = ['Inspiration', 'Motivation', 'Wisdom', 'Success', 'Life', 'Love', 'Other'];
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        newQuoteCategory.appendChild(option);
+    });
+    
+    categoryGroup.appendChild(newQuoteCategory);
+    addQuoteForm.appendChild(categoryGroup);
+    
+    // Create add quote button
+    addQuoteBtn = document.createElement('button');
+    addQuoteBtn.id = 'addQuote';
+    addQuoteBtn.textContent = 'Add Quote';
     addQuoteBtn.addEventListener('click', addQuote);
-    categoryFilter.addEventListener('change', filterQuotes);
+    addQuoteForm.appendChild(addQuoteBtn);
+    
+    // Append the form to the container
+    formContainer.appendChild(addQuoteForm);
 }
 
 // Show a random quote
@@ -44,47 +110,35 @@ function showRandomQuote() {
     const filteredQuotes = getFilteredQuotes();
     
     if (filteredQuotes.length === 0) {
-        quoteDisplay.innerHTML = '<p class="quote-text">No quotes available in this category.</p>';
+        // Clear existing content
+        quoteDisplay.innerHTML = '';
+        
+        // Create new elements dynamically
+        const noQuoteText = document.createElement('p');
+        noQuoteText.className = 'quote-text';
+        noQuoteText.textContent = 'No quotes available in this category.';
+        quoteDisplay.appendChild(noQuoteText);
         return;
     }
     
     const randomIndex = Math.floor(Math.random() * filteredQuotes.length);
     const quote = filteredQuotes[randomIndex];
     
-    quoteDisplay.innerHTML = `
-        <p class="quote-text">"${quote.text}"</p>
-        <span class="quote-category">${quote.category}</span>
-    `;
+    // Clear existing content
+    quoteDisplay.innerHTML = '';
+    
+    // Create quote text element
+    const quoteText = document.createElement('p');
+    quoteText.className = 'quote-text';
+    quoteText.textContent = `"${quote.text}"`;
+    quoteDisplay.appendChild(quoteText);
+    
+    // Create category element
+    const quoteCategory = document.createElement('span');
+    quoteCategory.className = 'quote-category';
+    quoteCategory.textContent = quote.category;
+    quoteDisplay.appendChild(quoteCategory);
 }
-
-// Create and manage the add quote form (required function)
-function createAddQuoteForm() {
-    return {
-        show: function() {
-            addQuoteForm.style.display = 'block';
-            showFormBtn.textContent = 'Hide Form';
-            newQuoteText.focus();
-        },
-        hide: function() {
-            addQuoteForm.style.display = 'none';
-            showFormBtn.textContent = 'Add New Quote';
-        },
-        toggle: function() {
-            if (addQuoteForm.style.display === 'block') {
-                this.hide();
-            } else {
-                this.show();
-            }
-        },
-        clear: function() {
-            newQuoteText.value = '';
-            newQuoteCategory.value = 'Inspiration';
-        }
-    };
-}
-
-// Initialize the form manager
-const addQuoteFormManager = createAddQuoteForm()
 
 // Toggle the add quote form visibility
 function toggleAddQuoteForm() {
@@ -155,6 +209,9 @@ function updateStats() {
     const categories = [...new Set(quotes.map(quote => quote.category))];
     totalCategoriesSpan.textContent = categories.length;
 }
+
+// Add event listener for category filter
+categoryFilter.addEventListener('change', filterQuotes);
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', init);
