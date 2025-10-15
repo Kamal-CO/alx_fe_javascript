@@ -57,6 +57,35 @@ function showRandomQuote() {
     `;
 }
 
+// Create and manage the add quote form (required function)
+function createAddQuoteForm() {
+    return {
+        show: function() {
+            addQuoteForm.style.display = 'block';
+            showFormBtn.textContent = 'Hide Form';
+            newQuoteText.focus();
+        },
+        hide: function() {
+            addQuoteForm.style.display = 'none';
+            showFormBtn.textContent = 'Add New Quote';
+        },
+        toggle: function() {
+            if (addQuoteForm.style.display === 'block') {
+                this.hide();
+            } else {
+                this.show();
+            }
+        },
+        clear: function() {
+            newQuoteText.value = '';
+            newQuoteCategory.value = 'Inspiration';
+        }
+    };
+}
+
+// Initialize the form manager
+const addQuoteFormManager = createAddQuoteForm()
+
 // Toggle the add quote form visibility
 function toggleAddQuoteForm() {
     if (addQuoteForm.style.display === 'block') {
