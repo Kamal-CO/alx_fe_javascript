@@ -13,7 +13,7 @@ body {
 }
 
 .container {
-    max-width: 800px;
+    max-width: 1000px;
     margin: 0 auto;
     background-color: rgba(255, 255, 255, 0.95);
     border-radius: 15px;
@@ -92,12 +92,12 @@ button {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
-    flex: 1;
 }
 
 #newQuote {
     background-color: #6e8efb;
     color: white;
+    flex: 1;
 }
 
 #newQuote:hover {
@@ -108,6 +108,7 @@ button {
 #showForm {
     background-color: #a777e3;
     color: white;
+    flex: 1;
 }
 
 #showForm:hover {
@@ -121,7 +122,6 @@ button {
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     margin-bottom: 30px;
-    display: none;
 }
 
 .form-section h2 {
@@ -179,10 +179,70 @@ input:focus, select:focus {
 .filter-controls {
     display: flex;
     gap: 15px;
+    margin-bottom: 15px;
 }
 
 .filter-controls select {
+    flex: 2;
+}
+
+#clearFilter {
+    background-color: #6c757d;
+    color: white;
     flex: 1;
+}
+
+#clearFilter:hover {
+    background-color: #5a6268;
+    transform: translateY(-2px);
+}
+
+.active-filter {
+    background-color: #e7f3ff;
+    padding: 10px 15px;
+    border-radius: 8px;
+    border-left: 4px solid #6e8efb;
+}
+
+.quotes-list-section {
+    margin-bottom: 30px;
+}
+
+.quotes-list-section h2 {
+    margin-bottom: 15px;
+    color: #444;
+    font-size: 1.5rem;
+}
+
+.quote-item {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border-left: 4px solid #a777e3;
+    transition: transform 0.2s;
+}
+
+.quote-item:hover {
+    transform: translateX(5px);
+}
+
+.quote-item-text {
+    font-size: 1.1rem;
+    font-style: italic;
+    margin-bottom: 10px;
+    color: #444;
+    line-height: 1.5;
+}
+
+.quote-item-category {
+    display: inline-block;
+    background-color: #a777e3;
+    color: white;
+    padding: 3px 12px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 500;
 }
 
 .stats {
@@ -205,8 +265,9 @@ footer {
 }
 
 @media (max-width: 600px) {
-    .controls, .filter-controls {
+    .controls, .filter-controls, .stats {
         flex-direction: column;
+        gap: 10px;
     }
     
     h1 {
@@ -215,5 +276,9 @@ footer {
     
     .quote-text {
         font-size: 1.2rem;
+    }
+    
+    .stats div {
+        margin-bottom: 5px;
     }
 }
