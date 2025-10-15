@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Quote Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Dynamic Quote Generator</h1>
+            <p class="subtitle">Find inspiration with curated quotes and add your own</p>
+        </header>
+        
+        <div class="main-content">
+            <section class="quote-section">
+                <div class="quote-display" id="quoteDisplay">
+                    <p class="quote-text">Click the button to generate a random quote!</p>
+                    <span class="quote-category">Inspiration</span>
+                </div>
+                
+                <div class="controls">
+                    <button id="newQuote">Show New Quote</button>
+                    <button id="showForm">Add New Quote</button>
+                </div>
+            </section>
+            
+            <section class="form-section" id="addQuoteForm">
+                <h2>Add Your Own Quote</h2>
+                <div class="form-group">
+                    <label for="newQuoteText">Quote Text</label>
+                    <input type="text" id="newQuoteText" placeholder="Enter a meaningful quote">
+                </div>
+                
+                <div class="form-group">
+                    <label for="newQuoteCategory">Category</label>
+                    <select id="newQuoteCategory">
+                        <option value="Inspiration">Inspiration</option>
+                        <option value="Motivation">Motivation</option>
+                        <option value="Wisdom">Wisdom</option>
+                        <option value="Success">Success</option>
+                        <option value="Life">Life</option>
+                        <option value="Love">Love</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                
+                <button id="addQuote">Add Quote</button>
+            </section>
+            
+            <section class="filter-section">
+                <h2>Filter Quotes by Category</h2>
+                <div class="filter-controls">
+                    <select id="categoryFilter">
+                        <option value="all">All Categories</option>
+                        <option value="Inspiration">Inspiration</option>
+                        <option value="Motivation">Motivation</option>
+                        <option value="Wisdom">Wisdom</option>
+                        <option value="Success">Success</option>
+                        <option value="Life">Life</option>
+                        <option value="Love">Love</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </section>
+            
+            <div class="stats">
+                <div>Total Quotes: <span id="totalQuotes">0</span></div>
+                <div>Categories: <span id="totalCategories">0</span></div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Dynamic Quote Generator &copy; 2023 | Advanced DOM Manipulation Project</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
