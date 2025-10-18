@@ -13,6 +13,7 @@ let quotes = [
 const quoteDisplay = document.getElementById('quoteDisplay');
 const newQuoteBtn = document.getElementById('newQuote');
 const showFormBtn = document.getElementById('showForm');
+const exportQuotesBtn = document.getElementById('exportQuotes');
 const formContainer = document.getElementById('formContainer');
 const categoryFilter = document.getElementById('categoryFilter');
 const clearFilterBtn = document.getElementById('clearFilter');
@@ -33,6 +34,12 @@ const conflictModal = document.getElementById('conflictModal');
 const conflictMessage = document.getElementById('conflictMessage');
 const resolveConflictBtn = document.getElementById('resolveConflict');
 const cancelResolutionBtn = document.getElementById('cancelResolution');
+const importFileInput = document.getElementById('importFile');
+const importQuotesBtn = document.getElementById('importQuotes');
+const exportAllQuotesBtn = document.getElementById('exportAllQuotes');
+const exportFilteredQuotesBtn = document.getElementById('exportFilteredQuotes');
+const includeMetadataCheckbox = document.getElementById('includeMetadata');
+const prettyPrintCheckbox = document.getElementById('prettyPrint');
 
 // Form elements (will be created dynamically)
 let addQuoteForm, newQuoteText, newQuoteCategory, addQuoteBtn;
@@ -76,14 +83,193 @@ function init() {
     // Event listeners
     newQuoteBtn.addEventListener('click', showRandomQuote);
     showFormBtn.addEventListener('click', toggleAddQuoteForm);
+    exportQuotesBtn.addEventListener('click', showExportSection);
     clearFilterBtn.addEventListener('click', clearFilter);
     categoryFilter.addEventListener('change', filterQuotes);
     manualSyncBtn.addEventListener('click', manualSync);
     resolveConflictBtn.addEventListener('click', resolveConflict);
     cancelResolutionBtn.addEventListener('click', cancelResolution);
+    importQuotesBtn.addEventListener('click', importQuotes);
+    exportAllQuotesBtn.addEventListener('click', exportAllQuotes);
+    exportFilteredQuotesBtn.addEventListener('click', exportFilteredQuotes);
     
     // Set up beforeunload to detect pending changes
     window.addEventListener('beforeunload', handleBeforeUnload);
+}
+
+// Show export section (scroll to it)
+function showExportSection() {
+    document.querySelector('.import-export-section').scrollIntoView({ 
+        behavior: 'smooth' 
+    });
+}
+
+// Export all quotes to JSON file
+function exportAllQuotes() {
+    const includeMetadata = includeMetadataCheckbox.checked;
+    const prettyPrint = prettyPrintCheckbox.checked;
+    
+    const exportData = prepareExportData(quotes, includeMetadata);
+    downloadJSON(exportData, 'all_quotes.json', prettyPrint);
+    
+    alert(`Exported ${quotes.length} quotes to JSON file!`);
+}
+
+// Export filtered quotes to JSON file
+function exportFilteredQuotes() {
+    const filteredQuotes = getFilteredQuotes();
+    const includeMetadata = includeMetadataCheckbox.checked;
+    const prettyPrint = prettyPrintCheckbox.checked;
+    
+    if (filteredQuotes.length === 0) {
+        alert('No quotes to export with the current filter.');
+        return;
+    }
+    
+    const exportData = prepareExportData(filteredQuotes, includeMetadata);
+    const filename = currentCategoryFilter === 'all' ? 'all_quotes.json' : `quotes_${currentCategoryFilter}.json`;
+    
+    downloadJSON(exportData, filename, prettyPrint);
+    
+    alert(`Exported ${filteredQuotes.length} filtered quotes to JSON file!`);
+}
+
+// Prepare data for export
+function prepareExportData(quotesToExport, includeMetadata) {
+    if (includeMetadata) {
+        return {
+            quotes: quotesToExport,
+            exportInfo: {
+                exportedAt: new Date().toISOString(),
+                totalQuotes: quotesToExport.length,
+                categories: [...new Set(quotesToExport.map(q => q.category))],
+                version: '1.0'
+            }
+        };
+    } else {
+        // Export only text and category
+        return quotesToExport.map(quote => ({
+            text: quote.text,
+            category: quote.category
+        }));
+    }
+}
+
+// Download JSON file
+function downloadJSON(data, filename, prettyPrint) {
+    const jsonString = prettyPrint ? 
+        JSON.stringify(data, null, 2) : 
+        JSON.stringify(data);
+    
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    URL.revokeObjectURL(url);
+}
+
+// Import quotes from JSON file
+function importQuotes() {
+    const file = importFileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a JSON file to import.');
+        return;
+    }
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            const importedQuotes = parseImportedData(importedData);
+            
+            if (importedQuotes.length === 0) {
+                alert('No valid quotes found in the selected file.');
+                return;
+            }
+            
+            // Show import confirmation
+            showImportConfirmation(importedQuotes);
+            
+        } catch (error) {
+            alert('Error parsing JSON file: ' + error.message);
+        }
+    };
+    
+    reader.onerror = function() {
+        alert('Error reading file.');
+    };
+    
+    reader.readAsText(file);
+}
+
+// Parse imported data (handle different formats)
+function parseImportedData(data) {
+    let quotesArray = [];
+    
+    // Handle different possible formats
+    if (Array.isArray(data)) {
+        // Direct array of quotes
+        quotesArray = data;
+    } else if (data.quotes && Array.isArray(data.quotes)) {
+        // Object with quotes property
+        quotesArray = data.quotes;
+    } else {
+        throw new Error('Invalid format: Expected array of quotes or object with "quotes" array');
+    }
+    
+    // Validate and transform quotes
+    return quotesArray.map((quote, index) => {
+        if (!quote.text || !quote.category) {
+            throw new Error(`Quote at index ${index} is missing required fields (text and category)`);
+        }
+        
+        return {
+            id: quote.id || Math.max(...quotes.map(q => q.id), 0) + index + 1,
+            text: quote.text,
+            category: quote.category,
+            version: quote.version || 1
+        };
+    });
+}
+
+// Show import confirmation dialog
+function showImportConfirmation(importedQuotes) {
+    const confirmed = confirm(
+        `Found ${importedQuotes.length} quotes to import.\n\n` +
+        `This will ${quotes.length > 0 ? 'merge with' : 'replace'} your current quotes.\n\n` +
+        `Do you want to proceed?`
+    );
+    
+    if (confirmed) {
+        // Merge imported quotes with existing ones
+        const existingIds = new Set(quotes.map(q => q.id));
+        const newQuotes = importedQuotes.filter(quote => !existingIds.has(quote.id));
+        
+        // Add new quotes (avoiding duplicates by ID)
+        quotes.push(...newQuotes);
+        
+        // Save to storage
+        saveQuotesToStorage();
+        
+        // Update UI
+        populateCategories();
+        updateStats();
+        showRandomQuote();
+        displayFilteredQuotes();
+        
+        alert(`Successfully imported ${newQuotes.length} new quotes!`);
+        
+        // Clear file input
+        importFileInput.value = '';
+    }
 }
 
 // Initialize mock server data
@@ -98,7 +284,7 @@ function initializeMockServer() {
     }
 }
 
-// ADDING THE MISSING FUNCTION: Fetch quotes from server simulation
+// Fetch quotes from server simulation
 async function fetchQuotesFromServer() {
     updateSyncStatus('syncing', 'Fetching quotes from server...');
     
@@ -106,10 +292,6 @@ async function fetchQuotesFromServer() {
         // Simulate API call to JSONPlaceholder or similar service
         // Since we're using localStorage as mock server, we'll simulate network delay
         await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-        
-        // In a real application, this would be:
-        // const response = await fetch('https://jsonplaceholder.typicode.com/posts');
-        // const serverQuotes = await response.json();
         
         // For simulation, we'll use our localStorage as the "server"
         const serverData = localStorage.getItem(SERVER_KEY);

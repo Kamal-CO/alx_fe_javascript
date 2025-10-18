@@ -30,6 +30,7 @@
                 <div class="controls">
                     <button id="newQuote">Show New Quote</button>
                     <button id="showForm">Add New Quote</button>
+                    <button id="exportQuotes">Export Quotes</button>
                 </div>
             </section>
             
@@ -54,6 +55,34 @@
                 <h2>All Quotes (<span id="quotesCount">0</span>)</h2>
                 <div class="quotes-container" id="quotesContainer">
                     <!-- Quotes will be displayed here when filtered -->
+                </div>
+            </section>
+
+            <!-- Import/Export Section -->
+            <section class="import-export-section">
+                <h2>Data Management</h2>
+                <div class="data-controls">
+                    <div class="import-export-group">
+                        <label for="importFile">Import Quotes from JSON file:</label>
+                        <input type="file" id="importFile" accept=".json" class="file-input">
+                        <button id="importQuotes" class="import-btn">Import Quotes</button>
+                    </div>
+                    <div class="import-export-group">
+                        <label>Export Quotes to JSON file:</label>
+                        <button id="exportAllQuotes" class="export-btn">Export All Quotes</button>
+                        <button id="exportFilteredQuotes" class="export-btn">Export Filtered Quotes</button>
+                    </div>
+                </div>
+                <div class="export-options">
+                    <h3>Export Options:</h3>
+                    <label>
+                        <input type="checkbox" id="includeMetadata" checked>
+                        Include metadata (IDs, versions, timestamps)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="prettyPrint" checked>
+                        Format JSON for readability
+                    </label>
                 </div>
             </section>
 
