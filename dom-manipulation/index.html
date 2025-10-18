@@ -17,8 +17,9 @@
             <!-- Sync Status Indicator -->
             <div class="sync-status" id="syncStatus">
                 <span class="sync-indicator" id="syncIndicator"></span>
-                <span id="syncMessage">Syncing with server...</span>
+                <span id="syncMessage">Initializing sync...</span>
                 <button id="manualSync" class="sync-btn">Sync Now</button>
+                <button id="viewSyncLog" class="sync-btn">View Log</button>
             </div>
 
             <section class="quote-section">
@@ -30,7 +31,6 @@
                 <div class="controls">
                     <button id="newQuote">Show New Quote</button>
                     <button id="showForm">Add New Quote</button>
-                    <button id="exportQuotes">Export Quotes</button>
                 </div>
             </section>
             
@@ -50,74 +50,87 @@
                     <span>Currently viewing: <strong id="currentFilter">All Categories</strong></span>
                 </div>
             </section>
-            
-            <section class="quotes-list-section" id="quotesListSection" style="display: none;">
-                <h2>All Quotes (<span id="quotesCount">0</span>)</h2>
-                <div class="quotes-container" id="quotesContainer">
-                    <!-- Quotes will be displayed here when filtered -->
+
+            <!-- Sync Configuration Section -->
+            <section class="sync-config-section">
+                <h2>Sync Configuration</h2>
+                <div class="config-controls">
+                    <div class="config-group">
+                        <label for="syncInterval">Sync Interval (seconds):</label>
+                        <input type="number" id="syncInterval" min="10" max="300" value="30">
+                    </div>
+                    <div class="config-group">
+                        <label for="autoSync">
+                            <input type="checkbox" id="autoSync" checked>
+                            Enable Auto Sync
+                        </label>
+                    </div>
+                    <div class="config-group">
+                        <label for="conflictStrategy">Conflict Resolution:</label>
+                        <select id="conflictStrategy">
+                            <option value="server">Server Wins</option>
+                            <option value="client">Client Wins</option>
+                            <option value="manual">Manual Resolution</option>
+                        </select>
+                    </div>
                 </div>
             </section>
 
-            <!-- Import/Export Section -->
-            <section class="import-export-section">
-                <h2>Data Management</h2>
-                <div class="data-controls">
-                    <div class="import-export-group">
-                        <label for="importFile">Import Quotes from JSON file:</label>
-                        <input type="file" id="importFile" accept=".json" class="file-input">
-                        <button id="importQuotes" class="import-btn">Import Quotes</button>
+            <!-- Sync Log Modal -->
+            <div class="modal" id="syncLogModal" style="display: none;">
+                <div class="modal-content large-modal">
+                    <h2>Sync Log</h2>
+                    <div class="sync-log" id="syncLog">
+                        <!-- Sync log entries will be added here -->
                     </div>
-                    <div class="import-export-group">
-                        <label>Export Quotes to JSON file:</label>
-                        <button id="exportAllQuotes" class="export-btn">Export All Quotes</button>
-                        <button id="exportFilteredQuotes" class="export-btn">Export Filtered Quotes</button>
+                    <div class="modal-actions">
+                        <button id="clearSyncLog" class="sync-btn">Clear Log</button>
+                        <button id="closeSyncLog" class="cancel-btn">Close</button>
                     </div>
                 </div>
-                <div class="export-options">
-                    <h3>Export Options:</h3>
-                    <label>
-                        <input type="checkbox" id="includeMetadata" checked>
-                        Include metadata (IDs, versions, timestamps)
-                    </label>
-                    <label>
-                        <input type="checkbox" id="prettyPrint" checked>
-                        Format JSON for readability
-                    </label>
-                </div>
-            </section>
+            </div>
 
             <!-- Conflict Resolution Modal -->
             <div class="modal" id="conflictModal" style="display: none;">
                 <div class="modal-content">
                     <h2>Data Sync Conflict</h2>
                     <p id="conflictMessage">We found conflicting changes between your local data and the server.</p>
+                    <div class="conflicts-list" id="conflictsList">
+                        <!-- Individual conflicts will be listed here -->
+                    </div>
                     <div class="conflict-options">
-                        <h3>Choose how to resolve:</h3>
+                        <h3>Resolution Strategy:</h3>
                         <label>
                             <input type="radio" name="resolution" value="server" checked>
                             Use server data (lose local changes)
                         </label>
                         <label>
-                            <input type="radio" name="resolution" value="local">
+                            <input type="radio" name="resolution" value="client">
                             Keep local data (ignore server changes)
                         </label>
                         <label>
                             <input type="radio" name="resolution" value="merge">
-                            Merge data (keep both)
+                            Merge data (keep both versions)
                         </label>
                     </div>
                     <div class="modal-actions">
                         <button id="resolveConflict" class="resolve-btn">Resolve Conflict</button>
-                        <button id="cancelResolution" class="cancel-btn">Cancel</button>
+                        <button id="cancelResolution" class="cancel-btn">Cancel Sync</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Sync Notification -->
+            <div class="notification" id="syncNotification" style="display: none;">
+                <span id="notificationMessage"></span>
+                <button id="closeNotification" class="notification-close">&times;</button>
             </div>
             
             <div class="stats">
                 <div>Total Quotes: <span id="totalQuotes">0</span></div>
                 <div>Categories: <span id="totalCategories">0</span></div>
-                <div>Current Filter: <span id="currentFilterStat">All</span></div>
                 <div>Last Sync: <span id="lastSyncTime">Never</span></div>
+                <div>Pending Changes: <span id="pendingChanges">0</span></div>
             </div>
         </div>
         
