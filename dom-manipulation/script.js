@@ -328,29 +328,130 @@ async function simulateServerUpdates(serverQuotes, posts) {
     }
 }
 
-// Post quotes to server (simulated with localStorage)
+// Post quotes to JSONPlaceholder API (simulated server)
 async function postToServer(data) {
-    updateSyncStatus('syncing', 'Sending changes to server...');
+    updateSyncStatus('syncing', 'Sending changes to JSONPlaceholder API...');
     
     try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 800));
+        // First, try to post to JSONPlaceholder API (simulated)
+        const postResponse = await postToJsonPlaceholder(data);
         
-        const serverData = {
-            quotes: data,
-            lastUpdated: Date.now(),
-            source: 'local'
-        };
-        
-        localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
-        localStorage.setItem(SERVER_TIMESTAMP_KEY, Date.now().toString());
-        
-        addSyncLogEntry('Successfully posted changes to server', 'success');
-        return { success: true };
+        if (postResponse.success) {
+            // Also update local server simulation
+            const serverData = {
+                quotes: data,
+                lastUpdated: Date.now(),
+                source: 'jsonplaceholder'
+            };
+            
+            localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
+            localStorage.setItem(SERVER_TIMESTAMP_KEY, Date.now().toString());
+            
+            addSyncLogEntry('Successfully posted changes to JSONPlaceholder API and local server', 'success');
+            return { success: true };
+        } else {
+            throw new Error(postResponse.error);
+        }
         
     } catch (error) {
         console.error('Failed to post to server:', error);
-        addSyncLogEntry(`Failed to post changes: ${error.message}`, 'error');
+        
+        // Fallback: Update only local server simulation
+        try {
+            const serverData = {
+                quotes: data,
+                lastUpdated: Date.now(),
+                source: 'local'
+            };
+            
+            localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
+            localStorage.setItem(SERVER_TIMESTAMP_KEY, Date.now().toString());
+            
+            addSyncLogEntry('Posted to local server (API unavailable)', 'warning');
+            return { success: true };
+            
+        } catch (fallbackError) {
+            console.error('Fallback also failed:', fallbackError);
+            addSyncLogEntry(`Failed to post changes: ${error.message}`, 'error');
+            return { success: false, error: error.message };
+        }
+    }
+}
+
+// POST data to JSONPlaceholder API with proper headers and method
+async function postToJsonPlaceholder(data) {
+    try {
+        // Convert our quotes data to JSONPlaceholder post format
+        const postsToCreate = data.slice(0, 5).map((quote, index) => ({
+            title: `Quote: ${quote.text.substring(0, 50)}...`,
+            body: `Category: ${quote.category}\nFull Text: ${quote.text}\nID: ${quote.id}\nVersion: ${quote.version}`,
+            userId: 1
+        }));
+
+        // Make POST requests for each post
+        const postPromises = postsToCreate.map(async (post) => {
+            const response = await fetch(JSON_PLACEHOLDER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(post)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        });
+
+        const results = await Promise.all(postPromises);
+        
+        addSyncLogEntry(`Successfully posted ${results.length} quotes to JSONPlaceholder API`, 'success');
+        return { 
+            success: true, 
+            message: `Posted ${results.length} items to API`,
+            results: results 
+        };
+
+    } catch (error) {
+        console.error('Failed to post to JSONPlaceholder:', error);
+        return { 
+            success: false, 
+            error: error.message 
+        };
+    }
+}
+
+// POST individual quote to JSONPlaceholder
+async function postSingleQuoteToServer(quote) {
+    try {
+        const postData = {
+            title: `Quote: ${quote.text.substring(0, 50)}...`,
+            body: `Category: ${quote.category}\nFull Text: ${quote.text}\nID: ${quote.id}\nVersion: ${quote.version}`,
+            userId: 1
+        };
+
+        const response = await fetch(JSON_PLACEHOLDER_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(postData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        addSyncLogEntry(`Posted quote "${quote.text.substring(0, 30)}..." to JSONPlaceholder API`, 'success');
+        return { success: true, data: result };
+
+    } catch (error) {
+        console.error('Failed to post single quote:', error);
         return { success: false, error: error.message };
     }
 }
@@ -493,9 +594,14 @@ async function syncWithServer() {
         }
         
         if (localChanges && conflicts.length === 0) {
-            // Push local changes to server
-            await postToServer(quotes);
-            showNotification('Changes synced to server successfully', 'success');
+            // Push local changes to server using POST method
+            const postResult = await postToServer(quotes);
+            
+            if (postResult.success) {
+                showNotification('Changes synced to JSONPlaceholder API successfully', 'success');
+            } else {
+                showNotification('Changes saved locally (API unavailable)', 'warning');
+            }
         } else if (!localChanges && conflicts.length === 0) {
             // Pull server changes
             quotes = serverQuotes;
@@ -602,7 +708,7 @@ async function autoResolveConflicts(conflicts, serverQuotes, strategy) {
         }
     }
     
-    // Update both local and server with resolved data
+    // Update both local and server with resolved data using POST
     quotes = resolvedQuotes;
     await postToServer(resolvedQuotes);
     saveQuotesToStorage();
@@ -669,9 +775,9 @@ async function resolveConflict() {
             break;
     }
     
-    // Update data
+    // Update data and POST to server
     quotes = resolvedQuotes;
-    await postToServer(resolvedQuotes);
+    const postResult = await postToServer(resolvedQuotes);
     saveQuotesToStorage();
     updateUIAfterSync();
     
@@ -683,7 +789,12 @@ async function resolveConflict() {
     updateLastSyncTime();
     
     addSyncLogEntry(`Manually resolved ${conflicts.length} conflicts using ${resolution} strategy`, 'success');
-    showNotification(`Successfully resolved ${conflicts.length} conflicts`, 'success');
+    
+    if (postResult.success) {
+        showNotification(`Successfully resolved ${conflicts.length} conflicts and synced to API`, 'success');
+    } else {
+        showNotification(`Resolved ${conflicts.length} conflicts (saved locally)`, 'warning');
+    }
 }
 
 // Merge local and server data
