@@ -1,134 +1,310 @@
-// Add these missing functions and enhancements to the existing script.js
-
-// Server simulation constants
-const JSON_PLACEHOLDER_URL = 'https://jsonplaceholder.typicode.com/posts';
-const SYNC_INTERVAL = 30000; // 30 seconds
-let syncInterval;
+// Add this function to the existing script.js file
 
 /**
- * Step 1: Simulate Server Interaction
- * Setup server simulation using JSONPlaceholder
+ * Fetch quotes from server simulation using JSONPlaceholder API
+ * This function implements periodic data fetching from the server
  */
-async function simulateServerInteraction() {
+async function fetchQuotesFromServer() {
     try {
-        // Fetch data from JSONPlaceholder
+        updateSyncUI('syncing', 'Fetching quotes from server...');
+        
+        // Simulate API call to JSONPlaceholder with proper error handling
         const response = await fetch(JSON_PLACEHOLDER_URL);
+        
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const posts = await response.json();
         
-        // Transform to quotes format for our application
-        const serverQuotes = posts.slice(0, 5).map((post, index) => ({
-            id: post.id,
-            text: `${post.title}. ${post.body.substring(0, 100)}...`,
-            category: ['Inspiration', 'Life', 'Motivation', 'Wisdom', 'Success'][index % 5],
-            version: 1,
-            lastModified: Date.now() - Math.random() * 86400000,
-            source: 'server'
-        }));
+        // Transform JSONPlaceholder posts to our quote format
+        const serverQuotes = posts.slice(0, 7).map((post, index) => {
+            // Create meaningful quote categories based on post content
+            const categories = ['Inspiration', 'Life', 'Motivation', 'Wisdom', 'Success', 'Philosophy', 'Knowledge'];
+            const category = categories[index % categories.length];
+            
+            // Create quote text from post data
+            const quoteText = post.title.length > 50 ? post.title : `${post.title}. ${post.body.substring(0, 100)}...`;
+            
+            return {
+                id: post.id + 1000, // Offset to avoid conflicts with local IDs
+                text: quoteText,
+                category: category,
+                version: 1,
+                lastModified: Date.now() - Math.floor(Math.random() * 86400000), // Random time in last 24 hours
+                source: 'jsonplaceholder',
+                serverId: post.id
+            };
+        });
+
+        // Simulate occasional server-side updates (30% chance)
+        if (Math.random() < 0.3) {
+            simulateServerSideUpdates(serverQuotes);
+        }
+
+        updateSyncUI('success', 'Successfully fetched quotes from server');
+        addSyncLogEntry(`Fetched ${serverQuotes.length} quotes from JSONPlaceholder API`, 'success');
         
-        return serverQuotes;
+        return {
+            success: true,
+            quotes: serverQuotes,
+            timestamp: Date.now(),
+            source: 'jsonplaceholder'
+        };
+        
     } catch (error) {
-        console.error('Server simulation failed:', error);
-        // Fallback to local mock data
-        return generateMockServerQuotes();
+        console.error('Failed to fetch from JSONPlaceholder:', error);
+        
+        // Fallback: Use localStorage as mock server
+        try {
+            const serverData = localStorage.getItem(SERVER_KEY);
+            if (serverData) {
+                const parsedData = JSON.parse(serverData);
+                updateSyncUI('success', 'Using cached server data');
+                addSyncLogEntry('Using cached server data (API unavailable)', 'warning');
+                
+                return {
+                    success: true,
+                    quotes: parsedData.quotes || [],
+                    timestamp: parsedData.lastUpdated || Date.now(),
+                    source: 'cache'
+                };
+            }
+        } catch (cacheError) {
+            console.error('Cache fallback failed:', cacheError);
+        }
+
+        // Final fallback: Generate mock server quotes
+        const mockQuotes = generateMockServerQuotes();
+        updateSyncUI('success', 'Using mock server data');
+        addSyncLogEntry('Using mock server data (all fallbacks failed)', 'warning');
+        
+        return {
+            success: true,
+            quotes: mockQuotes,
+            timestamp: Date.now(),
+            source: 'mock'
+        };
     }
 }
 
 /**
- * Generate mock server quotes for fallback
+ * Generate mock server quotes for complete fallback
  */
 function generateMockServerQuotes() {
-    return [
+    const mockQuotes = [
         {
-            id: 101,
-            text: "The server says: The only impossible journey is the one you never begin.",
-            category: "Motivation",
+            id: 1001,
+            text: "The server reminds you: The journey of a thousand miles begins with a single step.",
+            category: "Inspiration",
             version: 1,
             lastModified: Date.now() - 3600000,
             source: 'mock-server'
         },
         {
-            id: 102,
-            text: "Server update: In the middle of every difficulty lies opportunity.",
-            category: "Wisdom", 
+            id: 1002,
+            text: "Server wisdom: Don't watch the clock; do what it does. Keep going.",
+            category: "Motivation",
             version: 1,
             lastModified: Date.now() - 7200000,
             source: 'mock-server'
+        },
+        {
+            id: 1003,
+            text: "From the server: The only way to do great work is to love what you do.",
+            category: "Success",
+            version: 1,
+            lastModified: Date.now() - 10800000,
+            source: 'mock-server'
+        },
+        {
+            id: 1004,
+            text: "Server insight: Life is what happens to you while you're busy making other plans.",
+            category: "Life",
+            version: 1,
+            lastModified: Date.now() - 14400000,
+            source: 'mock-server'
+        },
+        {
+            id: 1005,
+            text: "Server thought: The future belongs to those who believe in the beauty of their dreams.",
+            category: "Dreams",
+            version: 1,
+            lastModified: Date.now() - 18000000,
+            source: 'mock-server'
         }
     ];
+    
+    // Occasionally update a random quote to simulate server changes
+    if (Math.random() < 0.4) {
+        const randomIndex = Math.floor(Math.random() * mockQuotes.length);
+        mockQuotes[randomIndex].version += 1;
+        mockQuotes[randomIndex].lastModified = Date.now();
+        mockQuotes[randomIndex].text += " [Updated by Server]";
+    }
+    
+    return mockQuotes;
 }
 
 /**
- * Step 2: Implement Data Syncing with Conflict Resolution
- * Main sync function that periodically checks for new quotes
+ * Simulate server-side updates to create realistic sync scenarios
+ */
+function simulateServerSideUpdates(serverQuotes) {
+    const updates = [];
+    
+    // Occasionally add a new server-generated quote (25% chance)
+    if (Math.random() < 0.25) {
+        const newServerQuote = {
+            id: Math.max(...serverQuotes.map(q => q.id)) + 1,
+            text: "Server-generated wisdom: The best time to plant a tree was 20 years ago. The second best time is now.",
+            category: ["Wisdom", "Inspiration", "Life"][Math.floor(Math.random() * 3)],
+            version: 1,
+            lastModified: Date.now(),
+            source: 'server-generated'
+        };
+        serverQuotes.push(newServerQuote);
+        updates.push('added new server quote');
+    }
+    
+    // Occasionally modify an existing quote (20% chance)
+    if (Math.random() < 0.2 && serverQuotes.length > 2) {
+        const randomIndex = Math.floor(Math.random() * serverQuotes.length);
+        serverQuotes[randomIndex].version += 1;
+        serverQuotes[randomIndex].lastModified = Date.now();
+        serverQuotes[randomIndex].text += " [Server Updated]";
+        updates.push('updated existing quote');
+    }
+    
+    // Occasionally remove a quote (10% chance)
+    if (Math.random() < 0.1 && serverQuotes.length > 3) {
+        const removeIndex = Math.floor(Math.random() * serverQuotes.length);
+        const removedQuote = serverQuotes.splice(removeIndex, 1)[0];
+        updates.push(`removed quote: "${removedQuote.text.substring(0, 30)}..."`);
+    }
+    
+    if (updates.length > 0) {
+        addSyncLogEntry(`Server performed: ${updates.join(', ')}`, 'info');
+    }
+}
+
+/**
+ * Enhanced sync function that uses fetchQuotesFromServer
  */
 async function syncQuotes() {
     try {
-        updateSyncUI('syncing', 'Checking for updates from server...');
+        updateSyncUI('syncing', 'Starting synchronization with server...');
+        addSyncLogEntry('Initiating quote synchronization', 'info');
         
-        // Fetch current server data
-        const serverQuotes = await simulateServerInteraction();
+        // Step 1: Fetch latest quotes from server using the required function
+        const serverResponse = await fetchQuotesFromServer();
         
-        // Detect conflicts between local and server data
+        if (!serverResponse.success) {
+            throw new Error(`Failed to fetch from server: ${serverResponse.error}`);
+        }
+        
+        const serverQuotes = serverResponse.quotes;
+        addSyncLogEntry(`Retrieved ${serverQuotes.length} quotes from server`, 'info');
+        
+        // Step 2: Detect conflicts between local and server data
         const conflicts = detectDataConflicts(serverQuotes);
         
         if (conflicts.length > 0) {
+            addSyncLogEntry(`Found ${conflicts.length} data conflicts`, 'warning');
+            showNotification(`Found ${conflicts.length} conflicts during sync`, 'warning');
+            
             // Apply conflict resolution strategy (server takes precedence)
             await resolveConflictsWithServerPrecedence(conflicts, serverQuotes);
-            showNotification(`${conflicts.length} conflicts resolved automatically`, 'info');
+            
+            addSyncLogEntry(`Resolved ${conflicts.length} conflicts automatically`, 'success');
         } else {
-            // No conflicts, merge data
-            await mergeServerData(serverQuotes);
-            showNotification('Data synced successfully', 'success');
+            addSyncLogEntry('No conflicts detected', 'info');
         }
         
-        updateSyncUI('success', 'Sync completed');
+        // Step 3: Merge server data with local data
+        await mergeServerData(serverQuotes);
+        
+        // Step 4: Update sync tracking and UI
+        lastSyncTimestamp = Date.now();
         updateLastSyncTime();
+        pendingChanges = false;
+        updatePendingChanges();
+        
+        updateSyncUI('success', 'Synchronization completed successfully');
+        addSyncLogEntry('Quote synchronization completed', 'success');
+        showNotification('Quotes synchronized successfully', 'success');
         
     } catch (error) {
         console.error('Sync failed:', error);
         updateSyncUI('error', `Sync failed: ${error.message}`);
         showNotification('Sync failed. Please try again.', 'error');
+        addSyncLogEntry(`Sync failed: ${error.message}`, 'error');
     }
 }
 
 /**
- * Detect conflicts between local and server data
+ * Enhanced conflict detection that works with fetchQuotesFromServer data
  */
 function detectDataConflicts(serverQuotes) {
     const conflicts = [];
     const serverQuoteMap = new Map(serverQuotes.map(q => [q.id, q]));
+    const localQuoteMap = new Map(quotes.map(q => [q.id, q]));
     
-    // Check each local quote against server data
+    // Check for update conflicts (same quote ID, different content)
     quotes.forEach(localQuote => {
         const serverQuote = serverQuoteMap.get(localQuote.id);
         
         if (serverQuote) {
-            // Both have the same quote ID
+            // Both local and server have the same quote
             if (serverQuote.lastModified > localQuote.lastModified) {
-                // Server has newer version
+                // Server has a newer version
                 if (serverQuote.text !== localQuote.text || serverQuote.category !== localQuote.category) {
                     conflicts.push({
                         type: 'update',
-                        local: localQuote,
-                        server: serverQuote,
-                        message: `Quote was modified on server: "${localQuote.text.substring(0, 50)}..."`
+                        id: localQuote.id,
+                        local: { ...localQuote },
+                        server: { ...serverQuote },
+                        message: `"${localQuote.text.substring(0, 50)}..." was modified on server`,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } else if (localQuote.lastModified > serverQuote.lastModified) {
+                // Local has newer version (potential reverse conflict)
+                if (localQuote.text !== serverQuote.text || localQuote.category !== serverQuote.category) {
+                    conflicts.push({
+                        type: 'reverse-update',
+                        id: localQuote.id,
+                        local: { ...localQuote },
+                        server: { ...serverQuote },
+                        message: `Local version is newer than server for: "${localQuote.text.substring(0, 50)}..."`,
+                        timestamp: new Date().toISOString()
                     });
                 }
             }
         }
     });
     
-    // Check for quotes deleted on server but existing locally
+    // Check for server additions (quotes on server that don't exist locally)
     serverQuotes.forEach(serverQuote => {
-        const localExists = quotes.some(q => q.id === serverQuote.id);
-        if (!localExists) {
+        if (!localQuoteMap.has(serverQuote.id)) {
             conflicts.push({
                 type: 'addition',
-                server: serverQuote,
-                message: `New quote from server: "${serverQuote.text.substring(0, 50)}..."`
+                id: serverQuote.id,
+                server: { ...serverQuote },
+                message: `New quote from server: "${serverQuote.text.substring(0, 50)}..."`,
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+    
+    // Check for local deletions (quotes locally that were deleted on server)
+    quotes.forEach(localQuote => {
+        if (!serverQuoteMap.has(localQuote.id) && localQuote.source !== 'local') {
+            conflicts.push({
+                type: 'deletion',
+                id: localQuote.id,
+                local: { ...localQuote },
+                message: `Quote was deleted on server: "${localQuote.text.substring(0, 50)}..."`,
+                timestamp: new Date().toISOString()
             });
         }
     });
@@ -137,279 +313,7 @@ function detectDataConflicts(serverQuotes) {
 }
 
 /**
- * Step 2: Conflict resolution with server precedence
- */
-async function resolveConflictsWithServerPrecedence(conflicts, serverQuotes) {
-    const serverQuoteMap = new Map(serverQuotes.map(q => [q.id, q]));
-    let updatedQuotes = [...quotes];
-    
-    conflicts.forEach(conflict => {
-        if (conflict.type === 'update') {
-            // Server takes precedence - update local quote with server version
-            const index = updatedQuotes.findIndex(q => q.id === conflict.server.id);
-            if (index !== -1) {
-                updatedQuotes[index] = { ...conflict.server };
-            }
-        } else if (conflict.type === 'addition') {
-            // Add server quote that doesn't exist locally
-            if (!updatedQuotes.some(q => q.id === conflict.server.id)) {
-                updatedQuotes.push({ ...conflict.server });
-            }
-        }
-    });
-    
-    // Update local data
-    quotes = updatedQuotes;
-    saveQuotesToStorage();
-    updateUIAfterSync();
-}
-
-/**
- * Merge server data with local data (no conflicts)
- */
-async function mergeServerData(serverQuotes) {
-    const serverQuoteMap = new Map(serverQuotes.map(q => [q.id, q]));
-    let mergedQuotes = [...quotes];
-    
-    // Add server quotes that don't exist locally
-    serverQuotes.forEach(serverQuote => {
-        if (!mergedQuotes.some(q => q.id === serverQuote.id)) {
-            mergedQuotes.push({ ...serverQuote });
-        }
-    });
-    
-    // Update local data
-    quotes = mergedQuotes;
-    saveQuotesToStorage();
-    updateUIAfterSync();
-}
-
-/**
- * Step 3: Enhanced UI elements for conflict resolution
- */
-function setupConflictResolutionUI() {
-    // Create conflict resolution modal if it doesn't exist
-    if (!document.getElementById('conflictResolutionModal')) {
-        const modalHTML = `
-            <div class="modal" id="conflictResolutionModal" style="display: none;">
-                <div class="modal-content">
-                    <h2>Data Sync Conflicts Detected</h2>
-                    <div id="conflictsList">
-                        <!-- Conflicts will be listed here -->
-                    </div>
-                    <div class="conflict-actions">
-                        <h3>Resolution Options:</h3>
-                        <button id="useServerData" class="btn btn-primary">Use Server Data</button>
-                        <button id="keepLocalData" class="btn btn-secondary">Keep Local Data</button>
-                        <button id="manualResolve" class="btn btn-warning">Resolve Manually</button>
-                    </div>
-                    <div class="modal-footer">
-                        <button id="cancelSync" class="btn btn-danger">Cancel Sync</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Add event listeners
-        document.getElementById('useServerData').addEventListener('click', () => {
-            resolveAllConflicts('server');
-            hideConflictModal();
-        });
-        
-        document.getElementById('keepLocalData').addEventListener('click', () => {
-            resolveAllConflicts('client');
-            hideConflictModal();
-        });
-        
-        document.getElementById('manualResolve').addEventListener('click', () => {
-            showManualConflictResolution();
-        });
-        
-        document.getElementById('cancelSync').addEventListener('click', () => {
-            hideConflictModal();
-            updateSyncUI('idle', 'Sync cancelled by user');
-        });
-    }
-}
-
-/**
- * Show manual conflict resolution interface
- */
-function showManualConflictResolution() {
-    // Implementation for manual conflict-by-conflict resolution
-    const conflicts = JSON.parse(localStorage.getItem('pendingConflicts') || '[]');
-    if (conflicts.length === 0) return;
-    
-    const currentConflict = conflicts[0];
-    const modalHTML = `
-        <div class="modal" id="manualResolutionModal">
-            <div class="modal-content">
-                <h2>Resolve Conflict</h2>
-                <div class="conflict-comparison">
-                    <div class="version local-version">
-                        <h3>Your Version:</h3>
-                        <p class="quote-text">"${currentConflict.local.text}"</p>
-                        <span class="category">${currentConflict.local.category}</span>
-                    </div>
-                    <div class="version server-version">
-                        <h3>Server Version:</h3>
-                        <p class="quote-text">"${currentConflict.server.text}"</p>
-                        <span class="category">${currentConflict.server.category}</span>
-                    </div>
-                </div>
-                <div class="resolution-options">
-                    <button class="btn-use-local" data-action="local">Use My Version</button>
-                    <button class="btn-use-server" data-action="server">Use Server Version</button>
-                    <button class="btn-keep-both" data-action="both">Keep Both</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Add event listeners for resolution buttons
-    document.querySelectorAll('[data-action]').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const action = e.target.getAttribute('data-action');
-            resolveSingleConflict(currentConflict, action);
-            document.getElementById('manualResolutionModal').remove();
-            
-            // Process next conflict or finish
-            const remainingConflicts = conflicts.slice(1);
-            if (remainingConflicts.length > 0) {
-                localStorage.setItem('pendingConflicts', JSON.stringify(remainingConflicts));
-                showManualConflictResolution();
-            } else {
-                localStorage.removeItem('pendingConflicts');
-                hideConflictModal();
-                showNotification('All conflicts resolved manually', 'success');
-            }
-        });
-    });
-}
-
-/**
- * Step 3: Notification system for data updates
- */
-function showNotification(message, type = 'info') {
-    // Remove existing notification
-    const existingNotification = document.getElementById('syncNotification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-    
-    const notification = document.createElement('div');
-    notification.id = 'syncNotification';
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-        <span class="notification-message">${message}</span>
-        <button class="notification-close">&times;</button>
-    `;
-    
-    // Add styles if not already added
-    if (!document.querySelector('#notificationStyles')) {
-        const styles = `
-            <style id="notificationStyles">
-                .notification {
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    padding: 15px 20px;
-                    border-radius: 8px;
-                    color: white;
-                    z-index: 1000;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                    max-width: 400px;
-                    animation: slideIn 0.3s ease;
-                }
-                .notification-info { background-color: #17a2b8; }
-                .notification-success { background-color: #28a745; }
-                .notification-warning { background-color: #ffc107; color: #212529; }
-                .notification-error { background-color: #dc3545; }
-                .notification-close {
-                    background: none;
-                    border: none;
-                    color: inherit;
-                    font-size: 1.2rem;
-                    cursor: pointer;
-                    padding: 0;
-                    width: 20px;
-                    height: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-            </style>
-        `;
-        document.head.insertAdjacentHTML('beforeend', styles);
-    }
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
-    
-    // Close button functionality
-    notification.querySelector('.notification-close').addEventListener('click', () => {
-        notification.remove();
-    });
-}
-
-/**
- * Update sync status UI
- */
-function updateSyncUI(status, message) {
-    const syncStatus = document.getElementById('syncStatus');
-    const syncIndicator = document.getElementById('syncIndicator');
-    const syncMessage = document.getElementById('syncMessage');
-    
-    if (syncStatus && syncIndicator && syncMessage) {
-        syncIndicator.className = `sync-indicator sync-${status}`;
-        syncMessage.textContent = message;
-        
-        // Add styles for sync indicator
-        if (!document.querySelector('#syncIndicatorStyles')) {
-            const styles = `
-                <style id="syncIndicatorStyles">
-                    .sync-indicator {
-                        width: 12px;
-                        height: 12px;
-                        border-radius: 50%;
-                        display: inline-block;
-                        margin-right: 8px;
-                    }
-                    .sync-syncing { background-color: #ffc107; animation: pulse 1s infinite; }
-                    .sync-success { background-color: #28a745; }
-                    .sync-error { background-color: #dc3545; }
-                    .sync-idle { background-color: #6c757d; }
-                    .sync-conflict { background-color: #fd7e14; animation: pulse 0.5s infinite; }
-                    @keyframes pulse {
-                        0% { opacity: 1; }
-                        50% { opacity: 0.5; }
-                        100% { opacity: 1; }
-                    }
-                </style>
-            `;
-            document.head.insertAdjacentHTML('beforeend', styles);
-        }
-    }
-}
-
-/**
- * Start periodic sync
+ * Update the periodic sync to use the enhanced system
  */
 function startPeriodicSync() {
     // Clear existing interval
@@ -417,147 +321,54 @@ function startPeriodicSync() {
         clearInterval(syncInterval);
     }
     
-    // Start new interval
+    // Start new interval that uses fetchQuotesFromServer
     syncInterval = setInterval(() => {
-        syncQuotes();
+        if (hasLocalChanges() || autoSyncCheckbox.checked) {
+            syncQuotes(); // This now uses fetchQuotesFromServer internally
+        }
     }, SYNC_INTERVAL);
     
     // Do initial sync
     syncQuotes();
     
     updateSyncUI('idle', `Auto-sync enabled (every ${SYNC_INTERVAL/1000}s)`);
+    addSyncLogEntry(`Periodic sync started with ${SYNC_INTERVAL/1000} second interval`, 'info');
 }
 
-/**
- * Stop periodic sync
- */
-function stopPeriodicSync() {
-    if (syncInterval) {
-        clearInterval(syncInterval);
-        syncInterval = null;
+// Add sync log functionality if not present
+function addSyncLogEntry(message, type = 'info') {
+    if (!window.syncLogEntries) {
+        window.syncLogEntries = [];
     }
-    updateSyncUI('idle', 'Auto-sync disabled');
-}
-
-/**
- * Manual sync trigger
- */
-function triggerManualSync() {
-    syncQuotes();
-}
-
-/**
- * Step 4: Testing and verification helpers
- */
-function setupTestUtilities() {
-    // Add test buttons to the UI
-    const testControls = document.createElement('div');
-    testControls.className = 'test-controls';
-    testControls.innerHTML = `
-        <h3>Testing Utilities</h3>
-        <button id="simulateServerUpdate" class="btn btn-test">Simulate Server Update</button>
-        <button id="createConflict" class="btn btn-test">Create Test Conflict</button>
-        <button id="resetTestData" class="btn btn-test">Reset Test Data</button>
-    `;
     
-    document.querySelector('.main-content').appendChild(testControls);
-    
-    // Test event listeners
-    document.getElementById('simulateServerUpdate').addEventListener('click', simulateServerUpdate);
-    document.getElementById('createConflict').addEventListener('click', createTestConflict);
-    document.getElementById('resetTestData').addEventListener('click', resetTestData);
-}
-
-/**
- * Simulate server-side update for testing
- */
-function simulateServerUpdate() {
-    const testQuote = {
-        id: 999,
-        text: "Test server update: This quote was modified on the server",
-        category: "Testing",
-        version: 2,
-        lastModified: Date.now(),
-        source: 'test-server'
+    const entry = {
+        timestamp: new Date().toLocaleTimeString(),
+        message,
+        type
     };
     
-    // Save to server simulation
-    const serverData = JSON.parse(localStorage.getItem(SERVER_KEY) || '{"quotes":[]}');
-    const existingIndex = serverData.quotes.findIndex(q => q.id === 999);
+    window.syncLogEntries.unshift(entry);
     
-    if (existingIndex !== -1) {
-        serverData.quotes[existingIndex] = testQuote;
+    // Keep only last 50 entries
+    if (window.syncLogEntries.length > 50) {
+        window.syncLogEntries = window.syncLogEntries.slice(0, 50);
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('syncLogEntries', JSON.stringify(window.syncLogEntries));
+    
+    console.log(`[Sync Log] ${type.toUpperCase()}: ${message}`);
+}
+
+// Initialize sync log on startup
+function initializeSyncLog() {
+    const savedLog = localStorage.getItem('syncLogEntries');
+    if (savedLog) {
+        window.syncLogEntries = JSON.parse(savedLog);
     } else {
-        serverData.quotes.push(testQuote);
+        window.syncLogEntries = [];
     }
-    
-    localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
-    showNotification('Server update simulated', 'info');
-}
-
-/**
- * Create test conflict for verification
- */
-function createTestConflict() {
-    // Create a quote that exists both locally and on server with different versions
-    const conflictQuote = {
-        id: 888,
-        text: "Local version of conflicted quote",
-        category: "Conflict",
-        version: 1,
-        lastModified: Date.now() - 10000, // Older than server
-        source: 'local'
-    };
-    
-    // Add to local quotes
-    if (!quotes.some(q => q.id === 888)) {
-        quotes.push(conflictQuote);
-        saveQuotesToStorage();
-    }
-    
-    // Create server version with newer timestamp
-    const serverQuote = {
-        ...conflictQuote,
-        text: "Server version of conflicted quote",
-        lastModified: Date.now(), // Newer than local
-        source: 'server'
-    };
-    
-    const serverData = JSON.parse(localStorage.getItem(SERVER_KEY) || '{"quotes":[]}');
-    const existingIndex = serverData.quotes.findIndex(q => q.id === 888);
-    
-    if (existingIndex !== -1) {
-        serverData.quotes[existingIndex] = serverQuote;
-    } else {
-        serverData.quotes.push(serverQuote);
-    }
-    
-    localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
-    showNotification('Test conflict created', 'warning');
-}
-
-/**
- * Reset test data
- */
-function resetTestData() {
-    // Remove test quotes
-    quotes = quotes.filter(q => q.id !== 888 && q.id !== 999);
-    saveQuotesToStorage();
-    
-    // Clear server test data
-    const serverData = JSON.parse(localStorage.getItem(SERVER_KEY) || '{"quotes":[]}');
-    serverData.quotes = serverData.quotes.filter(q => q.id !== 888 && q.id !== 999);
-    localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
-    
-    showNotification('Test data reset', 'success');
-}
-
-// Initialize sync system when app loads
-function initializeSyncSystem() {
-    setupConflictResolutionUI();
-    setupTestUtilities();
-    startPeriodicSync();
 }
 
 // Call this in your main init function
-// initializeSyncSystem();
+initializeSyncLog();
