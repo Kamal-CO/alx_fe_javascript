@@ -111,7 +111,8 @@ function updateCategoryDropdown() {
     categories.forEach(category => {
         const option = document.createElement('option');
         option.value = category;
-        option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+        const categoryText = document.createTextNode(category.charAt(0).toUpperCase() + category.slice(1));
+        option.appendChild(categoryText);
         categorySelect.appendChild(option);
     });
 }
