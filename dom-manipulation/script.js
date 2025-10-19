@@ -1,10 +1,7 @@
-// Add these constants at the top of the script.js file with other constants
-
-// Server simulation constants
+// Constants
 const JSON_PLACEHOLDER_URL = 'https://jsonplaceholder.typicode.com/posts';
 const SERVER_KEY = 'quoteGeneratorServerData';
 const SERVER_TIMESTAMP_KEY = 'quoteGeneratorServerTimestamp';
-const SYNC_LOG_KEY = 'quoteGeneratorSyncLog';
 const SYNC_INTERVAL = 30000; // 30 seconds
 
 // Initial quotes array
@@ -13,219 +10,322 @@ let quotes = [
     { id: 2, text: "Life is what happens to you while you're busy making other plans.", category: "Life", version: 1, lastModified: Date.now() },
     { id: 3, text: "The future belongs to those who believe in the beauty of their dreams.", category: "Motivation", version: 1, lastModified: Date.now() },
     { id: 4, text: "It is during our darkest moments that we must focus to see the light.", category: "Wisdom", version: 1, lastModified: Date.now() },
-    { id: 5, text: "Whoever is happy will make others happy too.", category: "Happiness", version: 1, lastModified: Date.now() },
-    { id: 6, text: "You only live once, but if you do it right, once is enough.", category: "Life", version: 1, lastModified: Date.now() },
-    { id: 7, text: "Be the change that you wish to see in the world.", category: "Inspiration", version: 1, lastModified: Date.now() }
+    { id: 5, text: "Whoever is happy will make others happy too.", category: "Happiness", version: 1, lastModified: Date.now() }
 ];
 
-// DOM Elements and other existing code remains the same...
-// ... [rest of your existing DOM element declarations]
-
-// Current state variables
+// Global variables
 let currentCategoryFilter = 'all';
 let syncInterval;
 let lastSyncTimestamp = null;
-let pendingChanges = false;
-let syncLogEntries = [];
 
-/**
- * Fetch quotes from JSONPlaceholder API - Complete implementation
- */
-async function fetchQuotesFromServer() {
-    try {
-        updateSyncUI('syncing', 'Fetching quotes from JSONPlaceholder API...');
-        addSyncLogEntry('Making request to: https://jsonplaceholder.typicode.com/posts', 'info');
-        
-        // Make actual API call to JSONPlaceholder
-        const response = await fetch('https://jsonplaceholder.typicode.com/posts');
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const posts = await response.json();
-        addSyncLogEntry(`Received ${posts.length} posts from JSONPlaceholder API`, 'success');
-        
-        // Transform posts to our quote format
-        const serverQuotes = transformPostsToQuotes(posts);
-        
-        // Simulate server-side updates for realistic testing
-        simulateServerUpdates(serverQuotes);
-        
-        // Update server storage in localStorage
-        updateServerStorage(serverQuotes);
-        
-        updateSyncUI('success', `Fetched ${serverQuotes.length} quotes from server`);
-        
-        return {
-            success: true,
-            quotes: serverQuotes,
-            timestamp: Date.now(),
-            source: 'jsonplaceholder'
+// Initialize the application
+function init() {
+    console.log('Initializing application...');
+    
+    // Initialize server data
+    initializeMockServer();
+    
+    // Load quotes from localStorage
+    loadQuotesFromStorage();
+    
+    // Create the add quote form
+    createAddQuoteForm();
+    
+    // Populate categories
+    populateCategories();
+    
+    // Update UI
+    updateStats();
+    showRandomQuote();
+    
+    // Start periodic sync
+    startPeriodicSync();
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    console.log('Application initialized successfully');
+}
+
+// Initialize mock server data
+function initializeMockServer() {
+    if (!localStorage.getItem(SERVER_KEY)) {
+        const serverData = {
+            quotes: [
+                { id: 101, text: "Server: The best way to predict the future is to create it.", category: "Inspiration", version: 1, lastModified: Date.now() - 3600000 },
+                { id: 102, text: "Server: Don't watch the clock; do what it does. Keep going.", category: "Motivation", version: 1, lastModified: Date.now() - 7200000 },
+                { id: 103, text: "Server: The only limit to our realization of tomorrow is our doubts of today.", category: "Wisdom", version: 1, lastModified: Date.now() - 10800000 }
+            ],
+            lastUpdated: Date.now()
         };
-        
-    } catch (error) {
-        console.error('Failed to fetch from JSONPlaceholder:', error);
-        return handleFetchError(error);
+        localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
+        localStorage.setItem(SERVER_TIMESTAMP_KEY, Date.now().toString());
     }
 }
 
-/**
- * Transform JSONPlaceholder posts to quote format
- */
-function transformPostsToQuotes(posts) {
-    const categories = ['Inspiration', 'Life', 'Motivation', 'Wisdom', 'Success', 'Philosophy', 'Knowledge'];
-    
-    return posts.slice(0, 8).map((post, index) => {
-        // Create meaningful quote text from post data
-        let quoteText;
-        if (post.title.length > 20) {
-            quoteText = post.title;
-        } else {
-            quoteText = `${post.title}. ${post.body.substring(0, 80)}...`;
+// Load quotes from localStorage
+function loadQuotesFromStorage() {
+    const savedQuotes = localStorage.getItem('quotes');
+    if (savedQuotes) {
+        try {
+            const parsedQuotes = JSON.parse(savedQuotes);
+            quotes = parsedQuotes;
+        } catch (error) {
+            console.error('Error loading quotes from storage:', error);
         }
-        
-        // Assign categories based on post content or round-robin
-        const categoryIndex = index % categories.length;
-        const category = categories[categoryIndex];
-        
-        return {
-            id: post.id + 1000, // Offset to avoid ID conflicts with local quotes
-            text: quoteText,
-            category: category,
-            version: 1,
-            lastModified: Date.now() - Math.floor(Math.random() * 86400000), // Random time in last 24 hours
-            source: 'jsonplaceholder',
-            originalPostId: post.id,
-            userId: post.userId
-        };
+    }
+}
+
+// Save quotes to localStorage
+function saveQuotesToStorage() {
+    localStorage.setItem('quotes', JSON.stringify(quotes));
+    localStorage.setItem('quotesLastUpdated', Date.now().toString());
+}
+
+// Create add quote form dynamically
+function createAddQuoteForm() {
+    const formContainer = document.getElementById('formContainer');
+    if (!formContainer) return;
+
+    const formSection = document.createElement('section');
+    formSection.className = 'form-section';
+    formSection.id = 'addQuoteForm';
+    formSection.style.display = 'none';
+
+    formSection.innerHTML = `
+        <h2>Add Your Own Quote</h2>
+        <div class="form-group">
+            <label for="newQuoteText">Quote Text</label>
+            <input type="text" id="newQuoteText" placeholder="Enter a meaningful quote">
+        </div>
+        <div class="form-group">
+            <label for="newQuoteCategory">Category</label>
+            <select id="newQuoteCategory">
+                <option value="Inspiration">Inspiration</option>
+                <option value="Motivation">Motivation</option>
+                <option value="Wisdom">Wisdom</option>
+                <option value="Life">Life</option>
+                <option value="Success">Success</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <button id="addQuote">Add Quote</button>
+    `;
+
+    formContainer.appendChild(formSection);
+
+    // Add event listener for the add quote button
+    document.getElementById('addQuote').addEventListener('click', addQuote);
+}
+
+// Populate categories dropdown
+function populateCategories() {
+    const categoryFilter = document.getElementById('categoryFilter');
+    if (!categoryFilter) return;
+
+    // Clear existing options except "All Categories"
+    while (categoryFilter.children.length > 1) {
+        categoryFilter.removeChild(categoryFilter.lastChild);
+    }
+
+    // Get unique categories
+    const categories = getUniqueCategories();
+    
+    // Add categories to dropdown
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        categoryFilter.appendChild(option);
     });
 }
 
-/**
- * Simulate server-side updates to create realistic sync scenarios
- */
-function simulateServerUpdates(serverQuotes) {
-    const updates = [];
+// Get unique categories
+function getUniqueCategories() {
+    const categories = [...new Set(quotes.map(quote => quote.category))];
+    return categories.sort();
+}
+
+// Show random quote
+function showRandomQuote() {
+    const quoteDisplay = document.getElementById('quoteDisplay');
+    if (!quoteDisplay) return;
+
+    const filteredQuotes = getFilteredQuotes();
     
-    // 25% chance to add a new server-generated quote
-    if (Math.random() < 0.25 && serverQuotes.length > 0) {
-        const newQuote = {
-            id: Math.max(...serverQuotes.map(q => q.id)) + 1,
-            text: "Server update: The best preparation for tomorrow is doing your best today.",
-            category: "Motivation",
-            version: 1,
-            lastModified: Date.now(),
-            source: 'server-generated'
-        };
-        serverQuotes.push(newQuote);
-        updates.push('added new server quote');
+    if (filteredQuotes.length === 0) {
+        quoteDisplay.innerHTML = '<p class="quote-text">No quotes available in this category.</p>';
+        return;
     }
+
+    const randomIndex = Math.floor(Math.random() * filteredQuotes.length);
+    const quote = filteredQuotes[randomIndex];
     
-    // 20% chance to modify an existing quote
-    if (Math.random() < 0.2 && serverQuotes.length > 3) {
-        const randomIndex = Math.floor(Math.random() * serverQuotes.length);
-        serverQuotes[randomIndex].version += 1;
-        serverQuotes[randomIndex].lastModified = Date.now();
-        serverQuotes[randomIndex].text += " [Server Updated]";
-        updates.push('updated existing quote');
+    quoteDisplay.innerHTML = `
+        <p class="quote-text">"${quote.text}"</p>
+        <span class="quote-category">${quote.category}</span>
+    `;
+}
+
+// Get filtered quotes based on current category
+function getFilteredQuotes() {
+    if (currentCategoryFilter === 'all') {
+        return quotes;
     }
-    
-    if (updates.length > 0) {
-        addSyncLogEntry(`Server simulation: ${updates.join(', ')}`, 'info');
+    return quotes.filter(quote => quote.category === currentCategoryFilter);
+}
+
+// Update statistics
+function updateStats() {
+    const totalQuotesSpan = document.getElementById('totalQuotes');
+    const totalCategoriesSpan = document.getElementById('totalCategories');
+    const lastSyncTime = document.getElementById('lastSyncTime');
+
+    if (totalQuotesSpan) totalQuotesSpan.textContent = quotes.length;
+    if (totalCategoriesSpan) totalCategoriesSpan.textContent = getUniqueCategories().length;
+    if (lastSyncTime) {
+        lastSyncTime.textContent = lastSyncTimestamp ? 
+            new Date(lastSyncTimestamp).toLocaleTimeString() : 'Never';
     }
 }
 
-/**
- * Update server storage in localStorage
- */
-function updateServerStorage(serverQuotes) {
-    const serverData = {
-        quotes: serverQuotes,
-        lastUpdated: Date.now(),
-        source: 'jsonplaceholder'
-    };
-    localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
-    localStorage.setItem(SERVER_TIMESTAMP_KEY, Date.now().toString());
+// Setup event listeners
+function setupEventListeners() {
+    const newQuoteBtn = document.getElementById('newQuote');
+    const showFormBtn = document.getElementById('showForm');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const clearFilterBtn = document.getElementById('clearFilter');
+    const manualSyncBtn = document.getElementById('manualSync');
+
+    if (newQuoteBtn) newQuoteBtn.addEventListener('click', showRandomQuote);
+    if (showFormBtn) showFormBtn.addEventListener('click', toggleAddQuoteForm);
+    if (categoryFilter) categoryFilter.addEventListener('change', filterQuotes);
+    if (clearFilterBtn) clearFilterBtn.addEventListener('click', clearFilter);
+    if (manualSyncBtn) manualSyncBtn.addEventListener('click', manualSync);
 }
 
-/**
- * Handle fetch errors with fallback strategies
- */
-function handleFetchError(error) {
-    addSyncLogEntry(`API fetch failed: ${error.message}`, 'error');
+// Toggle add quote form visibility
+function toggleAddQuoteForm() {
+    const form = document.getElementById('addQuoteForm');
+    const showFormBtn = document.getElementById('showForm');
     
-    // Try fallback to cached server data
-    try {
-        const cachedData = localStorage.getItem(SERVER_KEY);
-        if (cachedData) {
-            const serverData = JSON.parse(cachedData);
-            addSyncLogEntry('Using cached server data as fallback', 'warning');
-            
-            return {
-                success: true,
-                quotes: serverData.quotes || [],
-                timestamp: serverData.lastUpdated || Date.now(),
-                source: 'cache'
-            };
+    if (form && showFormBtn) {
+        if (form.style.display === 'block') {
+            form.style.display = 'none';
+            showFormBtn.textContent = 'Add New Quote';
+        } else {
+            form.style.display = 'block';
+            showFormBtn.textContent = 'Hide Form';
+            document.getElementById('newQuoteText').focus();
         }
-    } catch (cacheError) {
-        console.error('Cache fallback failed:', cacheError);
+    }
+}
+
+// Add new quote
+function addQuote() {
+    const textInput = document.getElementById('newQuoteText');
+    const categorySelect = document.getElementById('newQuoteCategory');
+    
+    if (!textInput || !categorySelect) return;
+
+    const text = textInput.value.trim();
+    let category = categorySelect.value;
+
+    if (!text) {
+        alert('Please enter a quote text.');
+        return;
+    }
+
+    if (category === 'Other') {
+        category = prompt('Enter new category name:') || 'Other';
+        if (!category.trim()) {
+            alert('Category is required.');
+            return;
+        }
+    }
+
+    const newQuote = {
+        id: Math.max(...quotes.map(q => q.id), 0) + 1,
+        text: text,
+        category: category,
+        version: 1,
+        lastModified: Date.now()
+    };
+
+    quotes.push(newQuote);
+    saveQuotesToStorage();
+    
+    // Update UI
+    populateCategories();
+    updateStats();
+    showRandomQuote();
+    
+    // Clear form
+    textInput.value = '';
+    categorySelect.value = 'Inspiration';
+    
+    // Hide form
+    toggleAddQuoteForm();
+    
+    alert('Quote added successfully!');
+}
+
+// Filter quotes by category
+function filterQuotes() {
+    const categoryFilter = document.getElementById('categoryFilter');
+    if (categoryFilter) {
+        currentCategoryFilter = categoryFilter.value;
+        showRandomQuote();
+    }
+}
+
+// Clear filter
+function clearFilter() {
+    const categoryFilter = document.getElementById('categoryFilter');
+    if (categoryFilter) {
+        categoryFilter.value = 'all';
+        currentCategoryFilter = 'all';
+        showRandomQuote();
+    }
+}
+
+// ==================== SYNC FUNCTIONALITY ====================
+
+// Start periodic synchronization using setInterval
+function startPeriodicSync() {
+    console.log('Starting periodic sync with setInterval...');
+    
+    // Clear any existing interval
+    if (syncInterval) {
+        clearInterval(syncInterval);
     }
     
-    // Final fallback: generate mock server quotes
-    const mockQuotes = generateMockServerQuotes();
-    addSyncLogEntry('Using mock server data as final fallback', 'warning');
+    // Start new interval - this is the key setInterval usage
+    syncInterval = setInterval(() => {
+        console.log('setInterval: Checking for server updates...');
+        syncQuotes();
+    }, SYNC_INTERVAL);
     
-    return {
-        success: true,
-        quotes: mockQuotes,
-        timestamp: Date.now(),
-        source: 'mock'
-    };
+    updateSyncUI('Auto-sync enabled (every 30s)');
+    
+    // Do initial sync
+    setTimeout(() => {
+        syncQuotes();
+    }, 2000);
 }
 
-/**
- * Generate mock server quotes for complete fallback
- */
-function generateMockServerQuotes() {
-    return [
-        {
-            id: 2001,
-            text: "Fallback server quote: The purpose of our lives is to be happy.",
-            category: "Life",
-            version: 1,
-            lastModified: Date.now() - 3600000,
-            source: 'mock-fallback'
-        },
-        {
-            id: 2002,
-            text: "Fallback server wisdom: Get busy living or get busy dying.",
-            category: "Motivation",
-            version: 1,
-            lastModified: Date.now() - 7200000,
-            source: 'mock-fallback'
-        },
-        {
-            id: 2003,
-            text: "Fallback server insight: Life is what happens when you're busy making other plans.",
-            category: "Philosophy",
-            version: 1,
-            lastModified: Date.now() - 10800000,
-            source: 'mock-fallback'
-        }
-    ];
+// Manual sync trigger
+function manualSync() {
+    console.log('Manual sync triggered');
+    syncQuotes();
 }
 
-/**
- * Enhanced sync function that uses the complete server integration
- */
+// Main sync function
 async function syncQuotes() {
     try {
-        updateSyncUI('syncing', 'Starting sync with JSONPlaceholder API...');
-        addSyncLogEntry('Initiating synchronization process', 'info');
+        updateSyncUI('Syncing with server...');
         
-        // Fetch from JSONPlaceholder API
+        // Step 1: Fetch quotes from server
         const serverResponse = await fetchQuotesFromServer();
         
         if (!serverResponse.success) {
@@ -233,51 +333,146 @@ async function syncQuotes() {
         }
         
         const serverQuotes = serverResponse.quotes;
-        addSyncLogEntry(`Processing ${serverQuotes.length} server quotes`, 'info');
+        console.log(`Fetched ${serverQuotes.length} quotes from server`);
         
-        // Detect and handle conflicts
+        // Step 2: Detect and resolve conflicts
         const conflicts = detectDataConflicts(serverQuotes);
         
         if (conflicts.length > 0) {
-            await handleSyncConflicts(conflicts, serverQuotes);
+            console.log(`Found ${conflicts.length} conflicts, resolving...`);
+            await resolveConflictsWithServerPrecedence(conflicts, serverQuotes);
+            showNotification(`${conflicts.length} conflicts resolved automatically`, 'info');
         } else {
             await mergeServerData(serverQuotes);
         }
         
-        // Update sync state
-        completeSyncProcess();
+        // Step 3: Update sync state
+        lastSyncTimestamp = Date.now();
+        updateStats();
+        updateSyncUI('Sync completed successfully');
+        showNotification('Quotes synchronized successfully', 'success');
         
     } catch (error) {
-        handleSyncError(error);
+        console.error('Sync failed:', error);
+        updateSyncUI('Sync failed: ' + error.message);
+        showNotification('Sync failed. Please try again.', 'error');
     }
 }
 
-/**
- * Handle sync conflicts with server precedence
- */
-async function handleSyncConflicts(conflicts, serverQuotes) {
-    addSyncLogEntry(`Found ${conflicts.length} conflicts, applying server precedence`, 'warning');
-    showNotification(`Resolving ${conflicts.length} conflicts automatically`, 'warning');
-    
-    // Apply server precedence strategy
-    const resolvedQuotes = applyServerPrecedence(conflicts, serverQuotes);
-    
-    // Update quotes and storage
-    quotes = resolvedQuotes;
-    saveQuotesToStorage();
-    updateUIAfterSync();
-    
-    addSyncLogEntry(`Successfully resolved ${conflicts.length} conflicts`, 'success');
+// Fetch quotes from JSONPlaceholder API
+async function fetchQuotesFromServer() {
+    try {
+        console.log('Fetching from JSONPlaceholder API...');
+        
+        // Make actual API call to JSONPlaceholder
+        const response = await fetch(JSON_PLACEHOLDER_URL);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const posts = await response.json();
+        console.log(`Received ${posts.length} posts from API`);
+        
+        // Transform posts to quotes
+        const serverQuotes = transformPostsToQuotes(posts);
+        
+        // Update server storage
+        updateServerStorage(serverQuotes);
+        
+        return {
+            success: true,
+            quotes: serverQuotes,
+            timestamp: Date.now()
+        };
+        
+    } catch (error) {
+        console.error('API fetch failed:', error);
+        
+        // Fallback to cached data
+        try {
+            const cachedData = localStorage.getItem(SERVER_KEY);
+            if (cachedData) {
+                const serverData = JSON.parse(cachedData);
+                return {
+                    success: true,
+                    quotes: serverData.quotes || [],
+                    timestamp: serverData.lastUpdated || Date.now()
+                };
+            }
+        } catch (cacheError) {
+            console.error('Cache fallback failed:', cacheError);
+        }
+        
+        return {
+            success: false,
+            error: error.message
+        };
+    }
 }
 
-/**
- * Apply server precedence conflict resolution
- */
-function applyServerPrecedence(conflicts, serverQuotes) {
+// Transform JSONPlaceholder posts to quotes
+function transformPostsToQuotes(posts) {
+    const categories = ['Inspiration', 'Life', 'Motivation', 'Wisdom', 'Success'];
+    
+    return posts.slice(0, 5).map((post, index) => ({
+        id: post.id + 1000,
+        text: post.title.length > 50 ? post.title : `${post.title}. ${post.body.substring(0, 50)}...`,
+        category: categories[index % categories.length],
+        version: 1,
+        lastModified: Date.now() - Math.floor(Math.random() * 86400000),
+        source: 'jsonplaceholder'
+    }));
+}
+
+// Update server storage
+function updateServerStorage(serverQuotes) {
+    const serverData = {
+        quotes: serverQuotes,
+        lastUpdated: Date.now()
+    };
+    localStorage.setItem(SERVER_KEY, JSON.stringify(serverData));
+    localStorage.setItem(SERVER_TIMESTAMP_KEY, Date.now().toString());
+}
+
+// Detect data conflicts
+function detectDataConflicts(serverQuotes) {
+    const conflicts = [];
+    const serverQuoteMap = new Map(serverQuotes.map(q => [q.id, q]));
+    
+    // Check for update conflicts
+    quotes.forEach(localQuote => {
+        const serverQuote = serverQuoteMap.get(localQuote.id);
+        if (serverQuote && serverQuote.lastModified > localQuote.lastModified) {
+            if (serverQuote.text !== localQuote.text || serverQuote.category !== localQuote.category) {
+                conflicts.push({
+                    type: 'update',
+                    local: localQuote,
+                    server: serverQuote
+                });
+            }
+        }
+    });
+    
+    // Check for server additions
+    serverQuotes.forEach(serverQuote => {
+        if (!quotes.some(q => q.id === serverQuote.id)) {
+            conflicts.push({
+                type: 'addition',
+                server: serverQuote
+            });
+        }
+    });
+    
+    return conflicts;
+}
+
+// Resolve conflicts with server precedence
+async function resolveConflictsWithServerPrecedence(conflicts, serverQuotes) {
     const serverQuoteMap = new Map(serverQuotes.map(q => [q.id, q]));
     let resolvedQuotes = [];
     
-    // Start with all server quotes (server takes precedence)
+    // Start with all server quotes
     resolvedQuotes = [...serverQuotes];
     
     // Add local quotes that don't exist on server
@@ -287,81 +482,74 @@ function applyServerPrecedence(conflicts, serverQuotes) {
         }
     });
     
-    return resolvedQuotes;
+    // Update quotes
+    quotes = resolvedQuotes;
+    saveQuotesToStorage();
+    updateUIAfterSync();
 }
 
-/**
- * Complete the sync process
- */
-function completeSyncProcess() {
-    lastSyncTimestamp = Date.now();
-    updateLastSyncTime();
-    pendingChanges = false;
-    updatePendingChanges();
+// Merge server data
+async function mergeServerData(serverQuotes) {
+    const serverQuoteMap = new Map(serverQuotes.map(q => [q.id, q]));
+    let mergedQuotes = [...quotes];
     
-    updateSyncUI('success', 'Sync completed with JSONPlaceholder');
-    showNotification('Successfully synchronized with server', 'success');
-    addSyncLogEntry('Synchronization process completed successfully', 'success');
+    // Add server quotes that don't exist locally
+    serverQuotes.forEach(serverQuote => {
+        if (!mergedQuotes.some(q => q.id === serverQuote.id)) {
+            mergedQuotes.push({ ...serverQuote });
+        }
+    });
+    
+    // Update quotes
+    quotes = mergedQuotes;
+    saveQuotesToStorage();
+    updateUIAfterSync();
 }
 
-/**
- * Handle sync errors
- */
-function handleSyncError(error) {
-    console.error('Sync error:', error);
-    updateSyncUI('error', `Sync failed: ${error.message}`);
-    showNotification('Synchronization failed', 'error');
-    addSyncLogEntry(`Sync failed: ${error.message}`, 'error');
+// Update UI after sync
+function updateUIAfterSync() {
+    populateCategories();
+    updateStats();
+    showRandomQuote();
 }
 
-/**
- * Initialize the sync system
- */
-function initializeSyncSystem() {
-    addSyncLogEntry('Initializing sync system with JSONPlaceholder API', 'info');
-    startPeriodicSync();
-}
-
-// Make sure to call this in your main init function
-// initializeSyncSystem();
-
-/**
- * POST data to JSONPlaceholder API (for completeness)
- */
-async function postToServer(data) {
-    try {
-        // Convert our quotes to JSONPlaceholder post format
-        const postsToCreate = data.slice(0, 3).map(quote => ({
-            title: `Quote: ${quote.text.substring(0, 40)}...`,
-            body: `Category: ${quote.category}\nFull Text: ${quote.text}\nID: ${quote.id}`,
-            userId: 1
-        }));
-
-        // Make POST requests
-        const postPromises = postsToCreate.map(async (post) => {
-            const response = await fetch('https://jsonplaceholder.typicode.com/posts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(post)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return await response.json();
-        });
-
-        const results = await Promise.all(postPromises);
-        addSyncLogEntry(`Posted ${results.length} quotes to JSONPlaceholder API`, 'success');
-        
-        return { success: true, results };
-
-    } catch (error) {
-        console.error('Failed to post to JSONPlaceholder:', error);
-        addSyncLogEntry(`POST failed: ${error.message}`, 'error');
-        return { success: false, error: error.message };
+// Update sync UI
+function updateSyncUI(message) {
+    const syncStatus = document.getElementById('syncStatus');
+    if (syncStatus) {
+        syncStatus.textContent = message;
     }
+    console.log('Sync UI:', message);
 }
+
+// Show notification
+function showNotification(message, type = 'info') {
+    console.log(`Notification [${type}]:`, message);
+    
+    // Create simple notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#17a2b8'};
+        color: white;
+        border-radius: 5px;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', init);
