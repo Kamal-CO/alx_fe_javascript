@@ -15,7 +15,7 @@ let quotes = loadQuotesFromStorage();
 // DOM elements
 const quoteDisplay = document.getElementById('quoteDisplay');
 const newQuoteBtn = document.getElementById('newQuote');
-const categorySelect = document.getElementById('categorySelect');
+const categoryFilter = document.getElementById('categoryFilter'); // Changed from categorySelect to categoryFilter
 const addQuoteBtn = document.getElementById('addQuoteBtn');
 const newQuoteText = document.getElementById('newQuoteText');
 const newQuoteCategory = document.getElementById('newQuoteCategory');
@@ -97,7 +97,7 @@ function loadFilterPreferences() {
             currentFilter = JSON.parse(storedFilters);
             
             // Apply stored filters to UI
-            categorySelect.value = currentFilter.category;
+            categoryFilter.value = currentFilter.category;
             searchInput.value = currentFilter.search;
             sortSelect.value = currentFilter.sort;
             
@@ -165,7 +165,7 @@ function populateCategories() {
         categoriesHTML += `<option value="${category}" ${selected}>${displayName}</option>`;
     });
     
-    categorySelect.innerHTML = categoriesHTML;
+    categoryFilter.innerHTML = categoriesHTML;
 }
 
 // Initialize categories (alias for populateCategories for backward compatibility)
@@ -270,7 +270,7 @@ function updateResultsInfo(count) {
 // Set up all event listeners
 function setupEventListeners() {
     newQuoteBtn.addEventListener('click', showRandomQuote);
-    categorySelect.addEventListener('change', handleCategoryChange);
+    categoryFilter.addEventListener('change', handleCategoryChange); // Updated to categoryFilter
     showAllBtn.addEventListener('click', showAllQuotes);
     exportQuotesBtn.addEventListener('click', exportQuotes);
     importQuotesBtn.addEventListener('click', triggerImport);
@@ -309,7 +309,7 @@ function clearSearch() {
 
 // Clear all filters
 function clearAllFilters() {
-    categorySelect.value = 'all';
+    categoryFilter.value = 'all'; // Updated to categoryFilter
     searchInput.value = '';
     sortSelect.value = 'newest';
     
@@ -394,7 +394,7 @@ function addQuote() {
     
     // Auto-filter to show the new quote
     currentFilter.category = newQuote.category;
-    categorySelect.value = newQuote.category;
+    categoryFilter.value = newQuote.category; // Updated to categoryFilter
     filterQuotes();
 }
 
