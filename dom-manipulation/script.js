@@ -1161,3 +1161,29 @@ async function fetchFromServer() {
         showNotification('Failed to fetch from server', 'error');
     }
 }
+
+function detectConflicts(localQuotes, serverQuotes) {
+    const conflicts = [];
+    
+    // Create maps for easy lookup
+    const localMap = new Map(localQuotes.map(q => [q.id, q]));
+    const serverMap = new Map(serverQuotes.map(q => [q.id, q]));
+    
+    // Check for conflicts in common quotes
+    for (const [id, localQuote] of localMap) {
+        const serverQuote = serverMap.get(id);
+        if (serverQuote && 
+            (localQuote.text !== serverQuote.text || 
+             localQuote.category !== serverQuote.category ||
+             localQuote.version !== serverQuote.version)) {
+            conflicts.push({
+                id: id,
+                local: localQuote,
+                server: serverQuote,
+                type: 'update'
+            });
+        }
+    }
+    
+    return conflicts;
+}
