@@ -27,18 +27,19 @@ document.addEventListener('DOMContentLoaded', function() {
     createAddQuoteForm();
 });
 
-// Initialize category filter dropdown
+// Initialize category filter dropdown using innerHTML
 function initializeCategories() {
     const categories = [...new Set(quotes.map(quote => quote.category))];
+    let categoriesHTML = '<option value="all">All Categories</option>';
+    
     categories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category;
-        option.textContent = category;
-        categorySelect.appendChild(option);
+        categoriesHTML += `<option value="${category}">${category}</option>`;
     });
+    
+    categorySelect.innerHTML = categoriesHTML;
 }
 
-// Display a random quote
+// Display a random quote using innerHTML
 function showRandomQuote() {
     const selectedCategory = categorySelect.value;
     let filteredQuotes = quotes;
@@ -58,7 +59,7 @@ function showRandomQuote() {
     displayQuote(randomQuote);
 }
 
-// Display a specific quote
+// Display a specific quote using innerHTML
 function displayQuote(quote) {
     quoteDisplay.innerHTML = `
         <div class="quote-card">
@@ -114,7 +115,7 @@ function addQuote() {
     
     quotes.push(newQuote);
     
-    // Update categories if it's a new one
+    // Update categories if it's a new one using innerHTML
     updateCategories(newQuote.category);
     
     // Clear form
@@ -129,19 +130,28 @@ function addQuote() {
     console.log('Total quotes:', quotes.length);
 }
 
-// Update categories dropdown with new category
+// Update categories dropdown with new category using innerHTML
 function updateCategories(newCategory) {
     const existingCategories = Array.from(categorySelect.options).map(option => option.value);
     
     if (!existingCategories.includes(newCategory)) {
-        const option = document.createElement('option');
-        option.value = newCategory;
-        option.textContent = newCategory;
-        categorySelect.appendChild(option);
+        // Rebuild the entire select with innerHTML
+        const categories = [...new Set(quotes.map(quote => quote.category))];
+        let categoriesHTML = '<option value="all">All Categories</option>';
+        
+        categories.forEach(category => {
+            const selected = category === categorySelect.value ? 'selected' : '';
+            categoriesHTML += `<option value="${category}" ${selected}>${category}</option>`;
+        });
+        
+        categorySelect.innerHTML = categoriesHTML;
+        
+        // Re-attach event listener after innerHTML replacement
+        categorySelect.addEventListener('change', showRandomQuote);
     }
 }
 
-// Display all quotes for current category
+// Display all quotes for current category using innerHTML
 function displayAllQuotes() {
     const selectedCategory = categorySelect.value;
     let filteredQuotes = quotes;
@@ -155,17 +165,18 @@ function displayAllQuotes() {
         return;
     }
     
-    quoteDisplay.innerHTML = `<h3>All Quotes (${filteredQuotes.length})</h3>`;
+    let quotesHTML = `<h3>All Quotes (${filteredQuotes.length})</h3>`;
     
     filteredQuotes.forEach((quote, index) => {
-        const quoteElement = document.createElement('div');
-        quoteElement.className = 'quote-card';
-        quoteElement.innerHTML = `
-            <p>"${quote.text}"</p>
-            <small><strong>Category:</strong> ${quote.category}</small>
+        quotesHTML += `
+            <div class="quote-card">
+                <p>"${quote.text}"</p>
+                <small><strong>Category:</strong> ${quote.category}</small>
+            </div>
         `;
-        quoteDisplay.appendChild(quoteElement);
     });
+    
+    quoteDisplay.innerHTML = quotesHTML;
 }
 
 // Export quotes functionality
@@ -199,7 +210,7 @@ function exportQuotes() {
     showNotification(`Exported ${quotesToExport.length} quotes successfully!`);
 }
 
-// Show notification message
+// Show notification message using innerHTML
 function showNotification(message, type = 'success') {
     // Remove existing notification if any
     const existingNotification = document.querySelector('.notification');
@@ -207,34 +218,42 @@ function showNotification(message, type = 'success') {
         existingNotification.remove();
     }
     
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'error' ? '#dc3545' : '#28a745'};
-        color: white;
-        padding: 15px 20px;
-        border-radius: 5px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        z-index: 1000;
-        animation: fadeIn 0.3s ease;
+    const notificationHTML = `
+        <div class="notification ${type}" style="
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'error' ? '#dc3545' : '#28a745'};
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        ">
+            ${message}
+        </div>
     `;
     
-    document.body.appendChild(notification);
+    document.body.innerHTML += notificationHTML;
     
     // Remove notification after 3 seconds
     setTimeout(() => {
-        notification.style.animation = 'fadeOut 0.3s ease';
-        setTimeout(() => notification.remove(), 300);
+        const notification = document.querySelector('.notification');
+        if (notification) {
+            notification.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }
     }, 3000);
 }
 
-// Add CSS animations for notifications
+// Add CSS animations for notifications using innerHTML
 const style = document.createElement('style');
-style.textContent = `
+style.innerHTML = `
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(-20px); }
         to { opacity: 1; transform: translateY(0); }
