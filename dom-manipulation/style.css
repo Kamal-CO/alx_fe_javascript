@@ -1,183 +1,145 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
 body {
-    background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-    color: #333;
-    min-height: 100vh;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.container {
+    font-family: Arial, sans-serif;
     max-width: 800px;
-    width: 100%;
-    background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 15px;
-    padding: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    margin-top: 20px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f5f5f5;
+    line-height: 1.6;
 }
 
 h1 {
-    text-align: center;
-    color: #fff;
-    margin-bottom: 10px;
-    font-size: 2.5rem;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.subtitle {
-    text-align: center;
-    color: #fff;
-    margin-bottom: 30px;
-    font-size: 1.2rem;
-}
-
-.quote-display {
-    background-color: #fff;
-    border-radius: 10px;
-    padding: 30px;
-    margin-bottom: 25px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    min-height: 200px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    position: relative;
-    border-left: 5px solid #2575fc;
-}
-
-.quote-text {
-    font-size: 1.4rem;
-    line-height: 1.6;
-    margin-bottom: 15px;
     color: #333;
-    font-style: italic;
+    text-align: center;
+    margin-bottom: 30px;
 }
 
-.quote-category {
-    display: inline-block;
-    background-color: #2575fc;
-    color: white;
-    padding: 5px 15px;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    font-weight: bold;
-}
-
-.controls {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 25px;
-    flex-wrap: wrap;
-    gap: 15px;
-}
-
-.category-selector {
-    flex: 1;
-    min-width: 200px;
-}
-
-select, button {
-    padding: 12px 15px;
+.quote-card {
+    background: white;
+    padding: 25px;
+    margin: 20px 0;
     border-radius: 8px;
-    border: none;
-    font-size: 1rem;
-    width: 100%;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-left: 4px solid #007bff;
 }
 
-select {
-    background-color: #fff;
-    border: 2px solid #ddd;
+.quote-card p {
+    font-size: 1.2em;
+    font-style: italic;
+    margin: 0 0 10px 0;
+    color: #333;
+}
+
+.quote-card small {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.category-filter {
+    margin: 20px 0;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.form-container {
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    margin: 20px 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.form-container h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+input, button, select {
+    padding: 10px;
+    margin: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+input {
+    width: 300px;
+    border: 1px solid #ccc;
+}
+
+input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.3);
 }
 
 button {
-    background: linear-gradient(to right, #6a11cb, #2575fc);
+    background-color: #007bff;
     color: white;
+    border: none;
     cursor: pointer;
-    font-weight: bold;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
 }
 
 button:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+    background-color: #0056b3;
 }
 
-.new-quote-form {
-    background-color: #fff;
-    border-radius: 10px;
-    padding: 25px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    margin-top: 20px;
-}
-
-.form-title {
-    margin-bottom: 20px;
-    color: #2575fc;
-    font-size: 1.5rem;
-    text-align: center;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-label {
+#newQuote {
     display: block;
-    margin-bottom: 8px;
-    font-weight: bold;
-    color: #555;
-}
-
-input, textarea {
-    width: 100%;
+    width: 200px;
+    margin: 20px auto;
     padding: 12px;
-    border-radius: 8px;
-    border: 2px solid #ddd;
-    font-size: 1rem;
-    transition: border-color 0.3s;
+    font-size: 1.1em;
 }
 
-input:focus, textarea:focus {
-    border-color: #2575fc;
-    outline: none;
+#showAll {
+    background-color: #28a745;
 }
 
-textarea {
-    min-height: 100px;
-    resize: vertical;
+#showAll:hover {
+    background-color: #218838;
 }
 
-.quote-counter {
-    text-align: center;
-    margin-top: 20px;
-    color: #fff;
-    font-size: 1.1rem;
+#exportQuotes {
+    background-color: #6c757d;
+}
+
+#exportQuotes:hover {
+    background-color: #545b62;
+}
+
+#addQuoteBtn {
+    background-color: #17a2b8;
+}
+
+#addQuoteBtn:hover {
+    background-color: #138496;
+}
+
+.category-filter label {
+    font-weight: bold;
+    margin-right: 10px;
 }
 
 @media (max-width: 600px) {
-    .container {
-        padding: 20px;
+    body {
+        padding: 10px;
     }
     
-    h1 {
-        font-size: 2rem;
+    input {
+        width: 100%;
+        margin: 5px 0;
     }
     
-    .quote-text {
-        font-size: 1.2rem;
+    .category-filter, .form-container {
+        padding: 15px;
     }
     
-    .controls {
-        flex-direction: column;
+    .category-filter button {
+        display: block;
+        width: 100%;
+        margin: 5px 0;
     }
 }
