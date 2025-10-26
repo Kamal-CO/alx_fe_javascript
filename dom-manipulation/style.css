@@ -110,17 +110,43 @@ button:hover {
     background-color: #545b62;
 }
 
-#addQuoteBtn {
+#importQuotes {
     background-color: #17a2b8;
 }
 
-#addQuoteBtn:hover {
+#importQuotes:hover {
     background-color: #138496;
+}
+
+#clearStorage {
+    background-color: #dc3545;
+}
+
+#clearStorage:hover {
+    background-color: #c82333;
+}
+
+#addQuoteBtn {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+#addQuoteBtn:hover {
+    background-color: #e0a800;
 }
 
 .category-filter label {
     font-weight: bold;
     margin-right: 10px;
+}
+
+.storage-info {
+    background: #e9ecef;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 0.9em;
+    color: #495057;
 }
 
 @media (max-width: 600px) {

@@ -16,6 +16,8 @@
         </select>
         <button id="showAll">Show All Quotes</button>
         <button id="exportQuotes">Export Quotes</button>
+        <button id="importQuotes">Import Quotes</button>
+        <button id="clearStorage">Clear All Data</button>
     </div>
     
     <div id="quoteDisplay"></div>
@@ -28,6 +30,9 @@
         <input id="newQuoteCategory" type="text" placeholder="Enter quote category" />
         <button id="addQuoteBtn">Add Quote</button>
     </div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="importFile" accept=".json" style="display: none;" />
 
     <script src="script.js"></script>
 </body>
