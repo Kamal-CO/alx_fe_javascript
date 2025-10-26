@@ -612,6 +612,7 @@ function updateResultsInfo(count) {
 
 // Set up all event listeners
 function setupEventListeners() {
+    document.getElementById('fetchFromServer').addEventListener('click', fetchFromServer);
     newQuoteBtn.addEventListener('click', showRandomQuote);
     categoryFilter.addEventListener('change', handleCategoryChange);
     showAllBtn.addEventListener('click', showAllQuotes);
@@ -1022,5 +1023,141 @@ async function fetchQuotesFromServer() {
             { text: "The best way to get started is to quit talking and begin doing.", author: "Walt Disney" },
             { text: "The pessimist sees difficulty in every opportunity. The optimist sees opportunity in every difficulty.", author: "Winston Churchill" }
         ];
+    }
+}
+
+// Mock API configuration
+const MOCK_API_URL = 'https://jsonplaceholder.typicode.com/posts';
+const QUOTES_API_URL = 'https://jsonplaceholder.typicode.com/posts'; // Using posts as quotes
+
+// Fetch quotes from mock server
+async function fetchQuotesFromServer() {
+    try {
+        console.log('Fetching quotes from server...');
+        
+        const response = await fetch(QUOTES_API_URL);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const posts = await response.json();
+        
+        // Convert posts to quote format
+        const serverQuotes = posts.slice(0, 10).map((post, index) => ({
+            id: `server-${post.id}`,
+            text: post.title.charAt(0).toUpperCase() + post.title.slice(1) + '.',
+            category: getCategoryFromId(post.userId),
+            timestamp: Date.now() - (index * 86400000), // Stagger timestamps
+            version: 1,
+            source: 'server'
+        }));
+        
+        console.log(`Fetched ${serverQuotes.length} quotes from server`);
+        return serverQuotes;
+        
+    } catch (error) {
+        console.error('Error fetching quotes from server:', error);
+        showNotification('Failed to fetch from server. Using local data.', 'error');
+        return []; // Return empty array on error
+    }
+}
+
+// Helper function to assign categories based on user ID
+function getCategoryFromId(userId) {
+    const categories = ['Inspiration', 'Motivation', 'Wisdom', 'Life', 'Success', 'Philosophy', 'Leadership'];
+    return categories[userId % categories.length];
+}
+
+// Enhanced sync function to fetch from server
+async function syncWithServer() {
+    if (!syncState.isOnline) {
+        updateSyncUI();
+        return;
+    }
+    
+    setSyncStatus('syncing', 'Syncing with server...');
+    
+    try {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+        
+        // Fetch fresh data from server
+        const serverQuotes = await fetchQuotesFromServer();
+        const localQuotes = quotes;
+        
+        const conflicts = detectConflicts(localQuotes, serverQuotes);
+        
+        if (conflicts.length > 0) {
+            syncState.conflicts = conflicts;
+            showConflictResolution(conflicts);
+            setSyncStatus('error', `${conflicts.length} conflicts detected`);
+        } else {
+            // No conflicts, merge data (server takes precedence for common items)
+            const mergedQuotes = mergeQuotes(localQuotes, serverQuotes);
+            quotes = mergedQuotes;
+            saveQuotesToStorage();
+            
+            syncState.lastSync = new Date();
+            syncState.pendingChanges = false;
+            setSyncStatus('online', `Synced ${new Date().toLocaleTimeString()}`);
+            
+            // Update UI
+            populateCategories();
+            filterQuotes();
+            displayStorageInfo();
+            
+            showNotification(`Synced successfully! ${mergedQuotes.length} quotes in sync.`);
+        }
+        
+    } catch (error) {
+        console.error('Sync failed:', error);
+        setSyncStatus('error', 'Sync failed: ' + error.message);
+        showNotification('Sync failed: ' + error.message, 'error');
+    }
+}
+
+// Enhanced merge function to handle server data
+function mergeQuotes(localQuotes, serverQuotes) {
+    const mergedMap = new Map();
+    
+    // Add all server quotes (server takes precedence)
+    serverQuotes.forEach(quote => {
+        mergedMap.set(quote.id, { ...quote });
+    });
+    
+    // Add local quotes that don't exist on server
+    localQuotes.forEach(quote => {
+        if (!mergedMap.has(quote.id) && !quote.id.startsWith('server-')) {
+            mergedMap.set(quote.id, { ...quote });
+        }
+    });
+    
+    return Array.from(mergedMap.values());
+}
+
+// Function to manually fetch from server
+async function fetchFromServer() {
+    try {
+        setSyncStatus('syncing', 'Fetching from server...');
+        const serverQuotes = await fetchQuotesFromServer();
+        
+        if (serverQuotes.length > 0) {
+            // Add server quotes to local collection
+            quotes.push(...serverQuotes);
+            saveQuotesToStorage();
+            populateCategories();
+            filterQuotes();
+            
+            showNotification(`Added ${serverQuotes.length} quotes from server!`);
+            setSyncStatus('online', `Fetched ${serverQuotes.length} quotes`);
+        } else {
+            showNotification('No new quotes found on server', 'error');
+            setSyncStatus('online', 'Server fetch complete');
+        }
+        
+    } catch (error) {
+        console.error('Fetch failed:', error);
+        setSyncStatus('error', 'Fetch failed');
+        showNotification('Failed to fetch from server', 'error');
     }
 }
