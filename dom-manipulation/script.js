@@ -1006,3 +1006,21 @@ style.innerHTML = `
     }
 `;
 document.head.appendChild(style);
+
+async function fetchQuotesFromServer() {
+    try {
+        const response = await fetch('/api/quotes');
+        if (!response.ok) {
+            throw new Error('Failed to fetch quotes');
+        }
+        const quotes = await response.json();
+        return quotes;
+    } catch (error) {
+        console.error('Error fetching quotes:', error);
+        // Fallback to local quotes if server fails
+        return [
+            { text: "The best way to get started is to quit talking and begin doing.", author: "Walt Disney" },
+            { text: "The pessimist sees difficulty in every opportunity. The optimist sees opportunity in every difficulty.", author: "Winston Churchill" }
+        ];
+    }
+}
