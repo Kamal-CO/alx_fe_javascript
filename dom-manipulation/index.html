@@ -9,26 +9,59 @@
 <body>
     <h1>Dynamic Quote Generator</h1>
     
-    <div class="category-filter">
-        <label for="categorySelect">Filter by Category:</label>
-        <select id="categorySelect">
-            <option value="all">All Categories</option>
-        </select>
+    <div class="controls-panel">
+        <div class="category-filter">
+            <label for="categorySelect">Filter by Category:</label>
+            <select id="categorySelect">
+                <option value="all">All Categories</option>
+            </select>
+            <button id="clearFilter">Clear Filter</button>
+        </div>
+        
+        <div class="search-filter">
+            <label for="searchInput">Search Quotes:</label>
+            <input type="text" id="searchInput" placeholder="Type to search quotes...">
+            <button id="clearSearch">Clear Search</button>
+        </div>
+
+        <div class="sort-options">
+            <label for="sortSelect">Sort by:</label>
+            <select id="sortSelect">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="category">Category A-Z</option>
+                <option value="text">Quote Text A-Z</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
         <button id="showAll">Show All Quotes</button>
+        <button id="newQuote">Show Random Quote</button>
         <button id="exportQuotes">Export Quotes</button>
         <button id="importQuotes">Import Quotes</button>
         <button id="clearStorage">Clear All Data</button>
     </div>
+
+    <div id="resultsInfo" class="results-info"></div>
     
     <div id="quoteDisplay"></div>
     
-    <button id="newQuote">Show New Random Quote</button>
-    
     <div class="form-container">
         <h3>Add New Quote</h3>
-        <input id="newQuoteText" type="text" placeholder="Enter a new quote" />
-        <input id="newQuoteCategory" type="text" placeholder="Enter quote category" />
-        <button id="addQuoteBtn">Add Quote</button>
+        <div class="form-group">
+            <input id="newQuoteText" type="text" placeholder="Enter a new quote" />
+            <input id="newQuoteCategory" type="text" placeholder="Enter quote category" />
+            <button id="addQuoteBtn">Add Quote</button>
+        </div>
+        <div class="quick-categories">
+            <strong>Quick Categories:</strong>
+            <button class="category-tag" data-category="Inspiration">Inspiration</button>
+            <button class="category-tag" data-category="Motivation">Motivation</button>
+            <button class="category-tag" data-category="Wisdom">Wisdom</button>
+            <button class="category-tag" data-category="Life">Life</button>
+            <button class="category-tag" data-category="Success">Success</button>
+        </div>
     </div>
 
     <!-- Hidden file input for import -->
