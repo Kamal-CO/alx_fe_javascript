@@ -10,21 +10,17 @@
     <h1>Dynamic Quote Generator</h1>
     
     <!-- Sync Status Panel -->
-    <div class="sync-status">
-        <span id="syncStatus">Sync: Offline</span>
-        <button id="manualSync">Sync Now</button>
-        <button id="fetchFromServer">Fetch from Server</button>
-        <button id="postToServer">Post to Server</button>
-        <button id="viewConflicts" style="display: none;">Resolve Conflicts</button>
-    </div>
-
     <div class="sync-panel">
         <div class="sync-status">
             <span id="syncStatus">Sync: Offline</span>
             <button id="manualSync">Sync Now</button>
+            <button id="fetchFromServer">Fetch from Server</button>
+            <button id="postToServer">Post to Server</button>
             <button id="viewConflicts" style="display: none;">Resolve Conflicts</button>
+            <button id="viewSyncHistory">View History</button>
         </div>
         <div class="sync-info" id="syncInfo"></div>
+        <div id="syncHistoryDisplay" class="sync-history" style="display: none;"></div>
     </div>
     
     <div class="controls-panel">
@@ -103,7 +99,6 @@
         </div>
     </div>
 
-    <script src="utils.js"></script> <!-- if fetchQuotesFromServer is defined here -->
     <script src="script.js"></script>
 </body>
 </html>

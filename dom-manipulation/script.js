@@ -16,13 +16,18 @@ let quotes = loadQuotesFromStorage();
 const SERVER_STORAGE_KEY = 'quoteGeneratorServer';
 const SYNC_INTERVAL = 30000; // 30 seconds
 
+// Mock API configuration
+const MOCK_API_URL = 'https://jsonplaceholder.typicode.com/posts';
+const QUOTES_API_URL = 'https://jsonplaceholder.typicode.com/posts';
+
 // Sync state
 let syncState = {
     lastSync: null,
     pendingChanges: false,
     conflicts: [],
     isOnline: true,
-    syncInterval: null
+    syncInterval: null,
+    autoSyncTimeout: null
 };
 
 // DOM elements
@@ -48,6 +53,10 @@ const manualSyncBtn = document.getElementById('manualSync');
 const viewConflictsBtn = document.getElementById('viewConflicts');
 const conflictModal = document.getElementById('conflictModal');
 const conflictList = document.getElementById('conflictList');
+const fetchFromServerBtn = document.getElementById('fetchFromServer');
+const postToServerBtn = document.getElementById('postToServer');
+const viewSyncHistoryBtn = document.getElementById('viewSyncHistory');
+const syncHistoryDisplay = document.getElementById('syncHistoryDisplay');
 
 // Current filter state
 let currentFilter = {
@@ -83,10 +92,10 @@ function initializeSync() {
     loadServerData();
     
     // Start periodic sync
-    syncState.syncInterval = setInterval(syncWithServer, SYNC_INTERVAL);
+    syncState.syncInterval = setInterval(syncQuotes, SYNC_INTERVAL);
     
     // Initial sync
-    setTimeout(syncWithServer, 2000);
+    setTimeout(syncQuotes, 2000);
     
     updateSyncUI();
 }
@@ -126,54 +135,395 @@ function getServerData() {
     }
 }
 
-// Main sync function
-async function syncWithServer() {
-    if (!syncState.isOnline) {
-        updateSyncUI();
-        return;
-    }
-    
-    setSyncStatus('syncing', 'Syncing with server...');
-    
-    try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-        
-        const serverData = getServerData();
-        if (!serverData) {
-            throw new Error('Server unavailable');
+// Main sync function that handles both directions
+function syncQuotes() {
+    return new Promise(async (resolve, reject) => {
+        if (!syncState.isOnline) {
+            console.log('Sync skipped: Offline mode');
+            resolve({ success: false, message: 'Offline mode' });
+            return;
         }
         
-        const serverQuotes = serverData.quotes || [];
-        const conflicts = detectConflicts(quotes, serverQuotes);
+        setSyncStatus('syncing', 'Starting sync...');
         
-        if (conflicts.length > 0) {
-            syncState.conflicts = conflicts;
-            showConflictResolution(conflicts);
-            setSyncStatus('error', `${conflicts.length} conflicts detected`);
-        } else {
-            // No conflicts, merge data
+        try {
+            // Step 1: Push local changes to server
+            const localChanges = quotes.filter(quote => 
+                !quote.id.startsWith('server-') && // Don't sync server-originated quotes back
+                (!quote.lastSynced || quote.timestamp > quote.lastSynced)
+            );
+            
+            let pushedCount = 0;
+            if (localChanges.length > 0) {
+                setSyncStatus('syncing', `Pushing ${localChanges.length} local changes...`);
+                
+                // Push each quote to server
+                for (const quote of localChanges) {
+                    try {
+                        await pushQuoteToServer(quote);
+                        quote.lastSynced = Date.now();
+                        pushedCount++;
+                    } catch (error) {
+                        console.error(`Failed to push quote ${quote.id}:`, error);
+                    }
+                }
+                
+                saveQuotesToStorage();
+            }
+            
+            // Step 2: Pull changes from server
+            setSyncStatus('syncing', 'Fetching server changes...');
+            const serverQuotes = await fetchQuotesFromServer();
+            
+            // Step 3: Detect and handle conflicts
+            const conflicts = detectConflicts(quotes, serverQuotes);
+            
+            if (conflicts.length > 0) {
+                syncState.conflicts = conflicts;
+                showConflictResolution(conflicts);
+                setSyncStatus('error', `${conflicts.length} conflicts detected`);
+                resolve({ 
+                    success: false, 
+                    message: 'Conflicts detected', 
+                    conflicts: conflicts.length,
+                    pushed: pushedCount
+                });
+                return;
+            }
+            
+            // Step 4: Merge data
             const mergedQuotes = mergeQuotes(quotes, serverQuotes);
             quotes = mergedQuotes;
             saveQuotesToStorage();
-            saveServerData(mergedQuotes);
             
+            // Update sync state
             syncState.lastSync = new Date();
             syncState.pendingChanges = false;
-            setSyncStatus('online', `Synced ${new Date().toLocaleTimeString()}`);
             
             // Update UI
             populateCategories();
             filterQuotes();
             displayStorageInfo();
             
-            showNotification(`Synced successfully! ${mergedQuotes.length} quotes in sync.`);
+            const message = `Sync complete! Pushed ${pushedCount} quotes, merged ${mergedQuotes.length} total quotes`;
+            setSyncStatus('online', `Synced ${new Date().toLocaleTimeString()}`);
+            showNotification(message);
+            
+            // Add to sync history
+            addSyncHistoryEntry('sync_complete', message);
+            
+            resolve({ 
+                success: true, 
+                message: message,
+                pushed: pushedCount,
+                total: mergedQuotes.length
+            });
+            
+        } catch (error) {
+            console.error('Sync failed:', error);
+            setSyncStatus('error', 'Sync failed: ' + error.message);
+            showNotification('Sync failed: ' + error.message, 'error');
+            
+            // Add to sync history
+            addSyncHistoryEntry('sync_failed', error.message);
+            
+            reject(error);
+        }
+    });
+}
+
+// Helper function to push a single quote to server
+async function pushQuoteToServer(quote) {
+    try {
+        const response = await fetch(QUOTES_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                title: quote.text,
+                body: `Category: ${quote.category} | ID: ${quote.id} | Timestamp: ${quote.timestamp}`,
+                userId: getUserIdFromCategory(quote.category)
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('Successfully pushed quote to server:', result);
+        return result;
+        
+    } catch (error) {
+        console.error('Error pushing quote to server:', error);
+        throw error;
+    }
+}
+
+// Helper function to get user ID from category
+function getUserIdFromCategory(category) {
+    const categories = ['Inspiration', 'Motivation', 'Wisdom', 'Life', 'Success', 'Philosophy', 'Leadership'];
+    const index = categories.indexOf(category);
+    return index !== -1 ? index + 1 : 1; // Return 1-7 or default to 1
+}
+
+// Fetch quotes from mock server
+async function fetchQuotesFromServer() {
+    try {
+        console.log('Fetching quotes from server...');
+        
+        const response = await fetch(QUOTES_API_URL);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        
+        const posts = await response.json();
+        
+        // Convert posts to quote format
+        const serverQuotes = posts.slice(0, 10).map((post, index) => ({
+            id: `server-${post.id}`,
+            text: post.title.charAt(0).toUpperCase() + post.title.slice(1) + '.',
+            category: getCategoryFromId(post.userId),
+            timestamp: Date.now() - (index * 86400000), // Stagger timestamps
+            version: 1,
+            source: 'server',
+            lastSynced: Date.now()
+        }));
+        
+        console.log(`Fetched ${serverQuotes.length} quotes from server`);
+        return serverQuotes;
+        
+    } catch (error) {
+        console.error('Error fetching quotes from server:', error);
+        showNotification('Failed to fetch from server. Using local data.', 'error');
+        return [];
+    }
+}
+
+// Helper function to assign categories based on user ID
+function getCategoryFromId(userId) {
+    const categories = ['Inspiration', 'Motivation', 'Wisdom', 'Life', 'Success', 'Philosophy', 'Leadership'];
+    return categories[userId % categories.length];
+}
+
+// Function to manually fetch from server
+async function fetchFromServer() {
+    try {
+        setSyncStatus('syncing', 'Fetching from server...');
+        const serverQuotes = await fetchQuotesFromServer();
+        
+        if (serverQuotes.length > 0) {
+            // Add server quotes to local collection
+            quotes.push(...serverQuotes);
+            saveQuotesToStorage();
+            populateCategories();
+            filterQuotes();
+            
+            showNotification(`Added ${serverQuotes.length} quotes from server!`);
+            setSyncStatus('online', `Fetched ${serverQuotes.length} quotes`);
+            
+            // Add to sync history
+            addSyncHistoryEntry('fetch_from_server', `Fetched ${serverQuotes.length} quotes`);
+        } else {
+            showNotification('No new quotes found on server', 'error');
+            setSyncStatus('online', 'Server fetch complete');
         }
         
     } catch (error) {
-        console.error('Sync failed:', error);
-        setSyncStatus('error', 'Sync failed: ' + error.message);
-        showNotification('Sync failed: ' + error.message, 'error');
+        console.error('Fetch failed:', error);
+        setSyncStatus('error', 'Fetch failed');
+        showNotification('Failed to fetch from server', 'error');
+        
+        // Add to sync history
+        addSyncHistoryEntry('fetch_failed', error.message);
+    }
+}
+
+// Function to manually post all quotes to server
+async function postAllQuotesToServer() {
+    try {
+        setSyncStatus('syncing', 'Posting quotes to server...');
+        
+        const quotesToPost = quotes.filter(quote => !quote.id.startsWith('server-'));
+        
+        if (quotesToPost.length === 0) {
+            showNotification('No local quotes to post to server', 'error');
+            setSyncStatus('online', 'No quotes to post');
+            return;
+        }
+        
+        const results = await postQuotesToServer(quotesToPost);
+        
+        // Update sync timestamps
+        quotes.forEach(quote => {
+            if (quotesToPost.find(q => q.id === quote.id)) {
+                quote.lastSynced = Date.now();
+            }
+        });
+        
+        saveQuotesToStorage();
+        syncState.pendingChanges = false;
+        
+        showNotification(`Successfully posted ${results.length} quotes to server!`);
+        setSyncStatus('online', `Posted ${results.length} quotes`);
+        
+        // Add to sync history
+        addSyncHistoryEntry('post_to_server', `Posted ${results.length} quotes`);
+        
+    } catch (error) {
+        console.error('Post failed:', error);
+        setSyncStatus('error', 'Post failed');
+        showNotification('Failed to post quotes to server', 'error');
+        
+        // Add to sync history
+        addSyncHistoryEntry('post_failed', error.message);
+    }
+}
+
+// Post quotes to mock server
+async function postQuotesToServer(quotesToPost) {
+    try {
+        console.log('Posting quotes to server...', quotesToPost);
+        
+        // For each quote, send a POST request
+        const postPromises = quotesToPost.map(async (quote) => {
+            const response = await fetch(QUOTES_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: quote.text,
+                    body: `Category: ${quote.category} | Timestamp: ${quote.timestamp}`,
+                    userId: Math.floor(Math.random() * 10) + 1 // Random user ID 1-10
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+            
+            return await response.json();
+        });
+        
+        const results = await Promise.all(postPromises);
+        console.log('Successfully posted quotes to server:', results);
+        return results;
+        
+    } catch (error) {
+        console.error('Error posting quotes to server:', error);
+        showNotification('Failed to post quotes to server', 'error');
+        throw error;
+    }
+}
+
+// Enhanced manual sync function
+function manualSync() {
+    syncQuotes()
+        .then(result => {
+            console.log('Manual sync completed:', result);
+        })
+        .catch(error => {
+            console.error('Manual sync failed:', error);
+        });
+}
+
+// Add auto-sync when quotes are modified
+function markChangesPending() {
+    syncState.pendingChanges = true;
+    updateSyncUI();
+    
+    // Auto-sync after 10 seconds if changes are pending
+    if (syncState.isOnline) {
+        clearTimeout(syncState.autoSyncTimeout);
+        syncState.autoSyncTimeout = setTimeout(() => {
+            if (syncState.pendingChanges) {
+                console.log('Auto-syncing pending changes...');
+                syncQuotes();
+            }
+        }, 10000); // Sync after 10 seconds
+    }
+}
+
+// Update sync UI
+function setSyncStatus(status, message) {
+    const statusElement = document.getElementById('syncStatus');
+    const syncStatusContainer = document.querySelector('.sync-status');
+    
+    syncStatusContainer.className = 'sync-status ' + status;
+    statusElement.textContent = `Sync: ${message}`;
+    
+    if (status === 'online') {
+        syncInfo.textContent = `Last sync: ${new Date().toLocaleTimeString()}`;
+    } else if (status === 'syncing') {
+        syncInfo.textContent = 'Synchronizing with server...';
+    } else if (status === 'error') {
+        syncInfo.textContent = 'Click "Sync Now" to retry';
+    }
+}
+
+function updateSyncUI() {
+    if (syncState.pendingChanges) {
+        setSyncStatus('syncing', 'Pending changes...');
+    } else if (syncState.lastSync) {
+        const lastSyncTime = syncState.lastSync.toLocaleTimeString();
+        setSyncStatus('online', `Last sync: ${lastSyncTime}`);
+    } else {
+        setSyncStatus('online', 'Ready to sync');
+    }
+}
+
+// Add sync history tracking
+function addSyncHistoryEntry(action, details) {
+    const historyEntry = {
+        timestamp: Date.now(),
+        action: action,
+        details: details
+    };
+    
+    try {
+        const syncHistory = JSON.parse(localStorage.getItem('syncHistory') || '[]');
+        syncHistory.unshift(historyEntry);
+        
+        // Keep only last 50 entries
+        if (syncHistory.length > 50) {
+            syncHistory.length = 50;
+        }
+        
+        localStorage.setItem('syncHistory', JSON.stringify(syncHistory));
+    } catch (error) {
+        console.error('Error saving sync history:', error);
+    }
+}
+
+// Function to display sync history
+function displaySyncHistory() {
+    try {
+        const syncHistory = JSON.parse(localStorage.getItem('syncHistory') || '[]');
+        let historyHTML = '<div class="sync-history"><h4>Recent Sync Activity</h4>';
+        
+        if (syncHistory.length === 0) {
+            historyHTML += '<p>No sync activity recorded yet.</p>';
+        } else {
+            syncHistory.forEach(entry => {
+                historyHTML += `
+                    <div class="sync-history-item">
+                        <span>${new Date(entry.timestamp).toLocaleString()}</span>
+                        <span>${entry.action}</span>
+                        <span>${entry.details || ''}</span>
+                    </div>
+                `;
+            });
+        }
+        
+        historyHTML += '</div>';
+        return historyHTML;
+    } catch (error) {
+        console.error('Error displaying sync history:', error);
+        return '<div class="sync-history"><p>Error loading sync history</p></div>';
     }
 }
 
@@ -227,7 +577,7 @@ function mergeQuotes(localQuotes, serverQuotes) {
     
     // Add local quotes that don't exist on server
     localQuotes.forEach(quote => {
-        if (!mergedMap.has(quote.id)) {
+        if (!mergedMap.has(quote.id) && !quote.id.startsWith('server-')) {
             mergedMap.set(quote.id, { ...quote });
         }
     });
@@ -342,6 +692,9 @@ function resolveConflicts(strategy) {
     saveQuotesToStorage();
     saveServerData(resolvedQuotes);
     
+    // Add to sync history
+    addSyncHistoryEntry('conflict_resolution', `Resolved ${syncState.conflicts.length} conflicts using ${strategy} strategy`);
+    
     syncState.conflicts = [];
     syncState.lastSync = new Date();
     syncState.pendingChanges = false;
@@ -356,42 +709,6 @@ function resolveConflicts(strategy) {
     
     showNotification(`Conflicts resolved using ${strategy} strategy`);
     setSyncStatus('online', `Synced ${new Date().toLocaleTimeString()}`);
-}
-
-// Update sync UI
-function setSyncStatus(status, message) {
-    const statusElement = document.getElementById('syncStatus');
-    const syncStatusContainer = document.querySelector('.sync-status');
-    
-    syncStatusContainer.className = 'sync-status ' + status;
-    statusElement.textContent = `Sync: ${message}`;
-    
-    if (status === 'online') {
-        syncInfo.textContent = `Last sync: ${new Date().toLocaleTimeString()}`;
-    } else if (status === 'syncing') {
-        syncInfo.textContent = 'Synchronizing with server...';
-    } else if (status === 'error') {
-        syncInfo.textContent = 'Click "Sync Now" to retry';
-    }
-}
-
-function updateSyncUI() {
-    if (syncState.pendingChanges) {
-        setSyncStatus('syncing', 'Pending changes...');
-    } else if (syncState.lastSync) {
-        setSyncStatus('online', `Last sync: ${syncState.lastSync.toLocaleTimeString()}`);
-    }
-}
-
-// Manual sync
-function manualSync() {
-    syncWithServer();
-}
-
-// Mark changes as pending (called when user makes changes)
-function markChangesPending() {
-    syncState.pendingChanges = true;
-    updateSyncUI();
 }
 
 // Load quotes from localStorage
@@ -612,10 +929,9 @@ function updateResultsInfo(count) {
 
 // Set up all event listeners
 function setupEventListeners() {
-    document.getElementById('postToServer').addEventListener('click', postAllQuotesToServer);
-    document.getElementById('fetchFromServer').addEventListener('click', fetchFromServer);
     newQuoteBtn.addEventListener('click', showRandomQuote);
     categoryFilter.addEventListener('change', handleCategoryChange);
+    addQuoteBtn.addEventListener('click', addQuote);
     showAllBtn.addEventListener('click', showAllQuotes);
     exportQuotesBtn.addEventListener('click', exportQuotes);
     importQuotesBtn.addEventListener('click', triggerImport);
@@ -627,6 +943,17 @@ function setupEventListeners() {
     sortSelect.addEventListener('change', handleSortChange);
     manualSyncBtn.addEventListener('click', manualSync);
     viewConflictsBtn.addEventListener('click', () => showConflictResolution(syncState.conflicts));
+    fetchFromServerBtn.addEventListener('click', fetchFromServer);
+    postToServerBtn.addEventListener('click', postAllQuotesToServer);
+    viewSyncHistoryBtn.addEventListener('click', function() {
+        const historyDisplay = document.getElementById('syncHistoryDisplay');
+        if (historyDisplay.style.display === 'none') {
+            historyDisplay.innerHTML = displaySyncHistory();
+            historyDisplay.style.display = 'block';
+        } else {
+            historyDisplay.style.display = 'none';
+        }
+    });
 }
 
 // Handle category change
@@ -723,7 +1050,8 @@ function addQuote() {
         text: text.charAt(0).toUpperCase() + text.slice(1),
         category: category.charAt(0).toUpperCase() + category.slice(1),
         timestamp: Date.now(),
-        version: 1
+        version: 1,
+        lastSynced: null // Not synced yet
     };
     
     quotes.push(newQuote);
@@ -733,6 +1061,23 @@ function addQuote() {
     
     // Mark changes as pending for sync
     markChangesPending();
+    
+    // Optionally auto-post to server
+    if (confirm('Would you like to post this quote to the server now?')) {
+        postQuotesToServer([newQuote]).then(() => {
+            // Update sync timestamp on success
+            const addedQuote = quotes.find(q => q.id === newQuote.id);
+            if (addedQuote) {
+                addedQuote.lastSynced = Date.now();
+                saveQuotesToStorage();
+                syncState.pendingChanges = false;
+                updateSyncUI();
+            }
+        }).catch(error => {
+            console.error('Auto-post failed:', error);
+            // Quote remains in local storage, will sync later
+        });
+    }
     
     // Update categories dropdown
     populateCategories();
@@ -786,7 +1131,7 @@ function showRandomQuote() {
     saveLastViewedQuote(randomQuote);
 }
 
-// Export quotes functionality - FIXED: Now properly uses Blob and application/json
+// Export quotes functionality
 function exportQuotes() {
     let quotesToExport = quotes;
     
@@ -811,7 +1156,7 @@ function exportQuotes() {
     // Create JSON string
     const quotesJSON = JSON.stringify(quotesToExport, null, 2);
     
-    // Create blob with application/json type - FIXED: Proper Blob usage
+    // Create blob with application/json type
     const blob = new Blob([quotesJSON], { type: 'application/json' });
     
     // Create download link
@@ -917,6 +1262,7 @@ function clearAllData() {
             // Clear localStorage
             localStorage.removeItem('quotes');
             localStorage.removeItem('filterPreferences');
+            localStorage.removeItem('syncHistory');
             
             // Clear server data
             localStorage.removeItem(SERVER_STORAGE_KEY);
@@ -1008,436 +1354,3 @@ style.innerHTML = `
     }
 `;
 document.head.appendChild(style);
-
-async function fetchQuotesFromServer() {
-    try {
-        const response = await fetch('/api/quotes');
-        if (!response.ok) {
-            throw new Error('Failed to fetch quotes');
-        }
-        const quotes = await response.json();
-        return quotes;
-    } catch (error) {
-        console.error('Error fetching quotes:', error);
-        // Fallback to local quotes if server fails
-        return [
-            { text: "The best way to get started is to quit talking and begin doing.", author: "Walt Disney" },
-            { text: "The pessimist sees difficulty in every opportunity. The optimist sees opportunity in every difficulty.", author: "Winston Churchill" }
-        ];
-    }
-}
-
-// Mock API configuration
-const MOCK_API_URL = 'https://jsonplaceholder.typicode.com/posts';
-const QUOTES_API_URL = 'https://jsonplaceholder.typicode.com/posts'; // Using posts as quotes
-
-// Fetch quotes from mock server
-async function fetchQuotesFromServer() {
-    try {
-        console.log('Fetching quotes from server...');
-        
-        const response = await fetch(QUOTES_API_URL);
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-        }
-        
-        const posts = await response.json();
-        
-        // Convert posts to quote format
-        const serverQuotes = posts.slice(0, 10).map((post, index) => ({
-            id: `server-${post.id}`,
-            text: post.title.charAt(0).toUpperCase() + post.title.slice(1) + '.',
-            category: getCategoryFromId(post.userId),
-            timestamp: Date.now() - (index * 86400000), // Stagger timestamps
-            version: 1,
-            source: 'server'
-        }));
-        
-        console.log(`Fetched ${serverQuotes.length} quotes from server`);
-        return serverQuotes;
-        
-    } catch (error) {
-        console.error('Error fetching quotes from server:', error);
-        showNotification('Failed to fetch from server. Using local data.', 'error');
-        return []; // Return empty array on error
-    }
-}
-
-// Helper function to assign categories based on user ID
-function getCategoryFromId(userId) {
-    const categories = ['Inspiration', 'Motivation', 'Wisdom', 'Life', 'Success', 'Philosophy', 'Leadership'];
-    return categories[userId % categories.length];
-}
-
-// Enhanced sync function to fetch from server
-async function syncWithServer() {
-    if (!syncState.isOnline) {
-        updateSyncUI();
-        return;
-    }
-    
-    setSyncStatus('syncing', 'Syncing with server...');
-    
-    try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-        
-        // Fetch fresh data from server
-        const serverQuotes = await fetchQuotesFromServer();
-        const localQuotes = quotes;
-        
-        const conflicts = detectConflicts(localQuotes, serverQuotes);
-        
-        if (conflicts.length > 0) {
-            syncState.conflicts = conflicts;
-            showConflictResolution(conflicts);
-            setSyncStatus('error', `${conflicts.length} conflicts detected`);
-        } else {
-            // No conflicts, merge data (server takes precedence for common items)
-            const mergedQuotes = mergeQuotes(localQuotes, serverQuotes);
-            quotes = mergedQuotes;
-            saveQuotesToStorage();
-            
-            syncState.lastSync = new Date();
-            syncState.pendingChanges = false;
-            setSyncStatus('online', `Synced ${new Date().toLocaleTimeString()}`);
-            
-            // Update UI
-            populateCategories();
-            filterQuotes();
-            displayStorageInfo();
-            
-            showNotification(`Synced successfully! ${mergedQuotes.length} quotes in sync.`);
-        }
-        
-    } catch (error) {
-        console.error('Sync failed:', error);
-        setSyncStatus('error', 'Sync failed: ' + error.message);
-        showNotification('Sync failed: ' + error.message, 'error');
-    }
-}
-
-// Enhanced merge function to handle server data
-function mergeQuotes(localQuotes, serverQuotes) {
-    const mergedMap = new Map();
-    
-    // Add all server quotes (server takes precedence)
-    serverQuotes.forEach(quote => {
-        mergedMap.set(quote.id, { ...quote });
-    });
-    
-    // Add local quotes that don't exist on server
-    localQuotes.forEach(quote => {
-        if (!mergedMap.has(quote.id) && !quote.id.startsWith('server-')) {
-            mergedMap.set(quote.id, { ...quote });
-        }
-    });
-    
-    return Array.from(mergedMap.values());
-}
-
-// Function to manually fetch from server
-async function fetchFromServer() {
-    try {
-        setSyncStatus('syncing', 'Fetching from server...');
-        const serverQuotes = await fetchQuotesFromServer();
-        
-        if (serverQuotes.length > 0) {
-            // Add server quotes to local collection
-            quotes.push(...serverQuotes);
-            saveQuotesToStorage();
-            populateCategories();
-            filterQuotes();
-            
-            showNotification(`Added ${serverQuotes.length} quotes from server!`);
-            setSyncStatus('online', `Fetched ${serverQuotes.length} quotes`);
-        } else {
-            showNotification('No new quotes found on server', 'error');
-            setSyncStatus('online', 'Server fetch complete');
-        }
-        
-    } catch (error) {
-        console.error('Fetch failed:', error);
-        setSyncStatus('error', 'Fetch failed');
-        showNotification('Failed to fetch from server', 'error');
-    }
-}
-
-// Enhanced conflict detection
-function detectConflicts(localQuotes, serverQuotes) {
-    const conflicts = [];
-    
-    // Create maps for easy lookup
-    const localMap = new Map(localQuotes.map(q => [q.id, q]));
-    const serverMap = new Map(serverQuotes.map(q => [q.id, q]));
-    
-    // Check for conflicts in common quotes
-    for (const [id, localQuote] of localMap) {
-        const serverQuote = serverMap.get(id);
-        if (serverQuote && 
-            (localQuote.text !== serverQuote.text || 
-             localQuote.category !== serverQuote.category ||
-             localQuote.version !== serverQuote.version)) {
-            conflicts.push({
-                id: id,
-                local: localQuote,
-                server: serverQuote,
-                type: 'update'
-            });
-        }
-    }
-    
-    return conflicts;
-}
-// Enhanced mock API configuration
-const MOCK_API_URL = 'https://jsonplaceholder.typicode.com/posts';
-const QUOTES_API_URL = 'https://jsonplaceholder.typicode.com/posts';
-
-// Post quotes to mock server
-async function postQuotesToServer(quotesToPost) {
-    try {
-        console.log('Posting quotes to server...', quotesToPost);
-        
-        // For each quote, send a POST request
-        const postPromises = quotesToPost.map(async (quote) => {
-            const response = await fetch(QUOTES_API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    title: quote.text,
-                    body: `Category: ${quote.category} | Timestamp: ${quote.timestamp}`,
-                    userId: Math.floor(Math.random() * 10) + 1 // Random user ID 1-10
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-            }
-            
-            return await response.json();
-        });
-        
-        const results = await Promise.all(postPromises);
-        console.log('Successfully posted quotes to server:', results);
-        return results;
-        
-    } catch (error) {
-        console.error('Error posting quotes to server:', error);
-        showNotification('Failed to post quotes to server', 'error');
-        throw error; // Re-throw to handle in calling function
-    }
-}
-
-// Enhanced sync function that both fetches and posts
-async function syncWithServer() {
-    if (!syncState.isOnline) {
-        updateSyncUI();
-        return;
-    }
-    
-    setSyncStatus('syncing', 'Syncing with server...');
-    
-    try {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-        
-        // First, post local changes to server
-        const quotesToSync = quotes.filter(quote => 
-            !quote.id.startsWith('server-') && // Don't sync server-originated quotes back
-            (!quote.lastSynced || quote.timestamp > quote.lastSynced)
-        );
-        
-        if (quotesToSync.length > 0) {
-            await postQuotesToServer(quotesToSync);
-            
-            // Update sync timestamps for successfully posted quotes
-            quotes.forEach(quote => {
-                if (quotesToSync.find(q => q.id === quote.id)) {
-                    quote.lastSynced = Date.now();
-                }
-            });
-            
-            saveQuotesToStorage();
-        }
-        
-        // Then, fetch fresh data from server
-        const serverQuotes = await fetchQuotesFromServer();
-        const localQuotes = quotes;
-        
-        const conflicts = detectConflicts(localQuotes, serverQuotes);
-        
-        if (conflicts.length > 0) {
-            syncState.conflicts = conflicts;
-            showConflictResolution(conflicts);
-            setSyncStatus('error', `${conflicts.length} conflicts detected`);
-        } else {
-            // No conflicts, merge data
-            const mergedQuotes = mergeQuotes(localQuotes, serverQuotes);
-            quotes = mergedQuotes;
-            saveQuotesToStorage();
-            
-            syncState.lastSync = new Date();
-            syncState.pendingChanges = false;
-            setSyncStatus('online', `Synced ${new Date().toLocaleTimeString()}`);
-            
-            // Update UI
-            populateCategories();
-            filterQuotes();
-            displayStorageInfo();
-            
-            const syncMessage = quotesToSync.length > 0 ? 
-                `Synced ${quotesToSync.length} quotes to server and merged ${mergedQuotes.length} total quotes` :
-                `Synced successfully! ${mergedQuotes.length} quotes in sync.`;
-            
-            showNotification(syncMessage);
-        }
-        
-    } catch (error) {
-        console.error('Sync failed:', error);
-        setSyncStatus('error', 'Sync failed: ' + error.message);
-        showNotification('Sync failed: ' + error.message, 'error');
-    }
-}
-
-// Function to manually post all quotes to server
-async function postAllQuotesToServer() {
-    try {
-        setSyncStatus('syncing', 'Posting quotes to server...');
-        
-        const quotesToPost = quotes.filter(quote => !quote.id.startsWith('server-'));
-        
-        if (quotesToPost.length === 0) {
-            showNotification('No local quotes to post to server', 'error');
-            setSyncStatus('online', 'No quotes to post');
-            return;
-        }
-        
-        const results = await postQuotesToServer(quotesToPost);
-        
-        // Update sync timestamps
-        quotes.forEach(quote => {
-            if (quotesToPost.find(q => q.id === quote.id)) {
-                quote.lastSynced = Date.now();
-            }
-        });
-        
-        saveQuotesToStorage();
-        syncState.pendingChanges = false;
-        
-        showNotification(`Successfully posted ${results.length} quotes to server!`);
-        setSyncStatus('online', `Posted ${results.length} quotes`);
-        
-    } catch (error) {
-        console.error('Post failed:', error);
-        setSyncStatus('error', 'Post failed');
-        showNotification('Failed to post quotes to server', 'error');
-    }
-}
-
-// Enhanced addQuote function to optionally post to server
-function addQuote() {
-    const text = newQuoteText.value.trim();
-    const category = newQuoteCategory.value.trim();
-    
-    if (!text) {
-        alert('Please enter a quote');
-        newQuoteText.focus();
-        return;
-    }
-    
-    if (!category) {
-        alert('Please enter a category');
-        newQuoteCategory.focus();
-        return;
-    }
-    
-    const newQuote = { 
-        id: generateId(),
-        text: text.charAt(0).toUpperCase() + text.slice(1),
-        category: category.charAt(0).toUpperCase() + category.slice(1),
-        timestamp: Date.now(),
-        version: 1,
-        lastSynced: null // Not synced yet
-    };
-    
-    quotes.push(newQuote);
-    
-    // Save to localStorage
-    saveQuotesToStorage();
-    
-    // Mark changes as pending for sync
-    markChangesPending();
-    
-    // Optionally auto-post to server
-    if (confirm('Would you like to post this quote to the server now?')) {
-        postQuotesToServer([newQuote]).then(() => {
-            // Update sync timestamp on success
-            const addedQuote = quotes.find(q => q.id === newQuote.id);
-            if (addedQuote) {
-                addedQuote.lastSynced = Date.now();
-                saveQuotesToStorage();
-                syncState.pendingChanges = false;
-                updateSyncUI();
-            }
-        }).catch(error => {
-            console.error('Auto-post failed:', error);
-            // Quote remains in local storage, will sync later
-        });
-    }
-    
-    // Update categories dropdown
-    populateCategories();
-    
-    // Clear form
-    newQuoteText.value = '';
-    newQuoteCategory.value = '';
-    
-    // Show confirmation
-    showNotification('Quote added successfully!');
-    
-    // Auto-filter to show the new quote
-    currentFilter.category = newQuote.category;
-    categoryFilter.value = newQuote.category;
-    filterQuotes();
-}
-
-// Enhanced fetchQuotesFromServer function
-async function fetchQuotesFromServer() {
-    try {
-        console.log('Fetching quotes from server...');
-        
-        const response = await fetch(QUOTES_API_URL);
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-        }
-        
-        const posts = await response.json();
-        
-        // Convert posts to quote format
-        const serverQuotes = posts.slice(0, 10).map((post, index) => ({
-            id: `server-${post.id}`,
-            text: post.title.charAt(0).toUpperCase() + post.title.slice(1) + '.',
-            category: getCategoryFromId(post.userId),
-            timestamp: Date.now() - (index * 86400000), // Stagger timestamps
-            version: 1,
-            source: 'server',
-            lastSynced: Date.now()
-        }));
-        
-        console.log(`Fetched ${serverQuotes.length} quotes from server`);
-        return serverQuotes;
-        
-    } catch (error) {
-        console.error('Error fetching quotes from server:', error);
-        showNotification('Failed to fetch from server. Using local data.', 'error');
-        return [];
-    }
-}
-// Helper function to assign categories based on user ID
-function getCategoryFromId(userId) {
-    const categories = ['Inspiration', 'Motivation', 'Wisdom', 'Life', 'Success', 'Philosophy', 'Leadership'];
-    return categories[userId % categories.length];
-}
